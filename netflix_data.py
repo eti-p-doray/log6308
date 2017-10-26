@@ -28,6 +28,22 @@ class DataSet(object):
     def num_examples(self):
         return len(self.ratings_)
 
+    @property
+    def users(self):
+        return self.users_
+
+    @property
+    def movies(self):
+        return self.movies_
+
+    @property
+    def dates(self):
+        return self.dates_
+
+    @property
+    def ratings(self):
+        return self.ratings_
+
     def iter_batch(self, batch_size, shuffle=True):
         perm = numpy.arange(self.num_examples)
         numpy.random.shuffle(perm)
@@ -75,8 +91,8 @@ def read_data_sets(train_dir) -> DataSet:
 #nf_prize.save("nf_prize_dataset/nf_prize.npy")
 #print(nf_prize.num_examples)
 
-nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npy")
-print(nf_prize.num_examples)
-for x in nf_prize.iter_batch(100):
-    print(x.movies_)
-    break
+#nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npy")
+#print(nf_prize.num_examples)
+#for x in nf_prize.iter_batch(100):
+#    print(x.movies_)
+#    break
