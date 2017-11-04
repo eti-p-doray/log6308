@@ -1,11 +1,10 @@
+import collections
 import csv
 import datetime
 import itertools
 import logging
 import numpy
 import os
-
-from tensorflow.contrib.learn.python.learn.datasets import base
 
 import utility
 
@@ -14,6 +13,7 @@ USER_COUNT = 480189
 MAX_USER_ID = 2649429
 NUM_RATING = 100480507
 
+Datasets = collections.namedtuple('Datasets', ['train', 'validation', 'test'])
 
 class DataSet(object):
     @staticmethod
@@ -77,7 +77,7 @@ class DataSet(object):
         train = next(datasets)
         validation = next(datasets)
         test = next(datasets)
-        return base.Datasets(train=train, validation=validation, test=test)
+        return Datasets(train=train, validation=validation, test=test)
 
     def save(self, filename):
         numpy.save(filename, numpy.vstack((self.movie_ids_, self.user_ids_, self.dates_, self.ratings_)))
@@ -123,8 +123,8 @@ def export_movie_titles(input, output):
 
 #export_movie_titles('nf_prize_dataset/movie_titles.txt', 'nf_prize_dataset/movie_titles.tsv')
 
-logging.basicConfig(level=logging.DEBUG)
-nf_prize, users = read_data_sets("nf_prize_dataset/training_set")
-nf_prize.save("nf_prize_dataset/nf_prize.npy")
-users.save("nf_prize_dataset/users.npy")
-print(nf_prize.num_examples)
+#logging.basicConfig(level=logging.DEBUG)
+#nf_prize, users = read_data_sets("nf_prize_dataset/training_set")
+#nf_prize.save("nf_prize_dataset/nf_prize.npy")
+#numpy.save("nf_prize_dataset/users.npy", users)
+#print(nf_prize.num_examples)
