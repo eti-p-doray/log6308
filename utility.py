@@ -16,3 +16,8 @@ def first(iterable):
         return next(it)
     except StopIteration:
         return None
+
+def pairwise(iterable):
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
