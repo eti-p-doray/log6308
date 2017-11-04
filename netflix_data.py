@@ -1,4 +1,6 @@
+import csv
 import datetime
+import itertools
 import logging
 import numpy
 import os
@@ -7,8 +9,9 @@ from tensorflow.contrib.learn.python.learn.datasets import base
 
 import utility
 
-MOVIE_COUNT = 17771
-USER_COUNT = 2649430
+MOVIE_COUNT = 17770
+USER_COUNT = 480189
+MAX_USER_ID = 2649429
 NUM_RATING = 100480507
 
 
@@ -18,9 +21,9 @@ class DataSet(object):
         data = numpy.load(filename)
         return DataSet(data[0,:], data[1,:], data[2,:], data[3,:])
 
-    def __init__(self, movies, users, dates, ratings):
-        self.movies_ = numpy.asarray(movies)
-        self.users_ = numpy.asarray(users)
+    def __init__(self, movie_ids, user_ids, dates, ratings):
+        self.movie_ids_ = numpy.asarray(movie_ids)
+        self.user_ids_ = numpy.asarray(user_ids)
         self.dates_ = numpy.asarray(dates)
         self.ratings_ = numpy.asarray(ratings)
 
@@ -29,12 +32,12 @@ class DataSet(object):
         return len(self.ratings_)
 
     @property
-    def users(self):
-        return self.users_
+    def movie_ids(self):
+        return self.movie_ids_
 
     @property
-    def movies(self):
-        return self.movies_
+    def user_ids(self):
+        return self.user_ids_
 
     @property
     def dates(self):
@@ -49,17 +52,38 @@ class DataSet(object):
         numpy.random.shuffle(perm)
         for i in range(0, len(perm), batch_size):
             indices = perm[i:min(i+batch_size, len(perm))]
-            movies = self.movies_[indices]
-            users = self.users_[indices]
+            movie_ids = self.movie_ids_[indices]
+            user_ids = self.user_ids_[indices]
             dates = self.dates_[indices]
             ratings = self.ratings_[indices]
-            yield DataSet(movies, users, dates, ratings)
+            yield DataSet(movie_ids, user_ids, dates, ratings)
+
+    def split(self, validation_size, test_size):
+        assert validation_size + test_size <= self.num_examples
+        train_size = self.num_examples - validation_size - test_size
+        perm = numpy.arange(self.num_examples)
+        numpy.random.shuffle(perm)
+
+        def genenerate_datasets():
+            for i,j in utility.pairwise(itertools.accumulate([0, train_size, validation_size, test_size, 1.0])):
+                indices = perm[i:j]
+                movie_ids = self.movie_ids_[indices]
+                user_ids = self.user_ids_[indices]
+                dates = self.dates_[indices]
+                ratings = self.ratings_[indices]
+                yield DataSet(movie_ids, user_ids, dates, ratings)
+
+        datasets = genenerate_datasets()
+        train = next(datasets)
+        validation = next(datasets)
+        test = next(datasets)
+        return base.Datasets(train=train, validation=validation, test=test)
 
     def save(self, filename):
-        numpy.save(filename, numpy.vstack((self.movies_, self.users_, self.dates_, self.ratings_)))
+        numpy.save(filename, numpy.vstack((self.movie_ids_, self.user_ids_, self.dates_, self.ratings_)))
 
 
-def read_data_sets(train_dir) -> DataSet:
+def read_data_sets(train_dir):
     epoch = datetime.datetime.utcfromtimestamp(0)
 
     ratings = numpy.zeros(NUM_RATING, dtype=numpy.int8)
@@ -70,12 +94,12 @@ def read_data_sets(train_dir) -> DataSet:
     k = 0
     for filename in os.listdir(train_dir):
         if filename.endswith(".txt"):
-            print(filename)
+            logging.info(filename)
             with open(os.path.join(train_dir, filename), 'r') as csvfile:
                 data = csvfile.readlines()
                 movieid = int(data.pop(0)[:-2])
                 numratings = len(data)
-                movieids[k:k + numratings] = movieid
+                movieids[k:k + numratings] = movieid-1
 
                 for j in range(numratings):
                     userid, stars, date = data[j][:-1].split(',')
@@ -85,14 +109,22 @@ def read_data_sets(train_dir) -> DataSet:
                                 epoch).total_seconds()
                     k = k + 1
 
-    return DataSet(movieids, userids, dates, ratings)
+    users, userids = numpy.unique(userids, return_inverse=True)
+    return DataSet(movieids, userids, dates, ratings), users
 
-#nf_prize = read_data_sets("nf_prize_dataset/training_set")
-#nf_prize.save("nf_prize_dataset/nf_prize.npy")
-#print(nf_prize.num_examples)
 
-#nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npy")
-#print(nf_prize.num_examples)
-#for x in nf_prize.iter_batch(100):
-#    print(x.movies_)
-#    break
+def export_movie_titles(input, output):
+    with open(input, 'r', encoding='latin-1') as inputfile, open(output, 'w+') as outputfile:
+        reader = csv.reader(inputfile, delimiter=',')
+        writer = csv.writer(outputfile, delimiter='\t')
+        writer.writerow(['Id', 'Year', 'Title'])
+        for row in reader:
+            writer.writerow(row)
+
+#export_movie_titles('nf_prize_dataset/movie_titles.txt', 'nf_prize_dataset/movie_titles.tsv')
+
+logging.basicConfig(level=logging.DEBUG)
+nf_prize, users = read_data_sets("nf_prize_dataset/training_set")
+nf_prize.save("nf_prize_dataset/nf_prize.npy")
+users.save("nf_prize_dataset/users.npy")
+print(nf_prize.num_examples)
