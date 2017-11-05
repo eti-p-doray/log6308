@@ -1,80 +1,146 @@
+import argparse
+import logging
+import os
+import sys
+
 import tensorflow as tf
+from tensorflow.contrib.tensorboard.plugins import projector
 
 import netflix_data
-import visu
 
-user_embedding_size = 15
-movie_embedding_size = 15
-
-user_ids = tf.placeholder(tf.int32, shape=[None])
-movie_ids = tf.placeholder(tf.int32, shape=[None])
-ratings = tf.placeholder(tf.int8, shape=[None])
-
-user_embeddings = tf.Variable(tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.1))
-embedded_users = tf.gather(user_embeddings, user_ids)
+DEFAULT_N_ITER = 500000
+BATCH_SIZE = 512
+REGULARIZATION_FACTOR = 0.1
+LEARNING_SPEED = 0.5
+LOG_DIR = "log/netflix_1.0_collaborative"
+MODEL_NAME = "netflix_1.0_collaborative"
 
 
-movie_embeddings = tf.Variable(tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.1))
-embedded_movies = tf.gather(movie_embeddings, movie_ids)
+def main(argv):
+    parser = argparse.ArgumentParser(description="""
+    Simple matrix factorization algorithm to find latent variables that represents netflix prize data.
+    """, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_prize.npy',
+                        help='Netflix input data input file.')
+    parser.add_argument('--checkpoint', type=int, default=None,
+                        help='Saved session checkpoint, -1 for latest')
+    parser.add_argument('--n_iter', type=int, default=DEFAULT_N_ITER,
+                        help='Total number of iterations')
 
-X = tf.concat((embedded_users, embedded_movies), 1)
+    logging.basicConfig(level=logging.DEBUG)
 
-W1 = tf.Variable(tf.truncated_normal([user_embedding_size + movie_embedding_size, 20], stddev=0.1))
-B1 = tf.Variable(tf.zeros([20]))
-W2 = tf.Variable(tf.truncated_normal([20, 10], stddev=0.1))
-B2 = tf.Variable(tf.zeros([10]))
-W3 = tf.Variable(tf.truncated_normal([10, 1], stddev=0.1))
-B3 = tf.Variable(tf.zeros([1]))
+    args = parser.parse_args()
+    n_iter = args.n_iter
+    logging.info("Number of iterations: " + str(n_iter))
 
-Y1 = tf.nn.sigmoid(tf.matmul(X, W1) + B1)
-Y2 = tf.nn.sigmoid(tf.matmul(Y1, W2) + B2)
-Y = tf.matmul(Y2, W3) + B3
+    user_embedding_size = 20
+    movie_embedding_size = 60
 
-allweights = tf.concat([tf.reshape(embedded_users, [-1])], 0)
-allbiases  = tf.concat([tf.reshape(embedded_movies, [-1])], 0)
+    user_ids = tf.placeholder(tf.int32, shape=[None])
+    movie_ids = tf.placeholder(tf.int32, shape=[None])
+    ratings = tf.placeholder(tf.int8, shape=[None])
 
-mse = tf.reduce_mean(tf.square(tf.cast(ratings, tf.float32) - Y))
-loss = (mse + 0.1*(
-       tf.reduce_mean(tf.square(embedded_users)) +
-       tf.reduce_mean(tf.square(embedded_movies))))
+    global_step = tf.get_variable('global_step', initializer=0, trainable=False)
 
-correct_prediction = tf.equal(tf.round(Y), tf.cast(ratings, tf.float32))
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    user_embeddings = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.01), trainable=False)
+    embedded_users = tf.gather(user_embeddings, user_ids)
 
-# training, learning rate = 0.005
-train_step = tf.train.GradientDescentOptimizer(0.1).minimize(loss)
+    movie_embeddings = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.01), trainable=False)
+    embedded_movies = tf.gather(movie_embeddings, movie_ids)
 
-datavis = visu.NetflixDataVis()
+    X = tf.concat((embedded_users, embedded_movies), 1)
 
-# init
-init = tf.global_variables_initializer()
-sess = tf.Session()
-sess.run(init)
+    W1 = tf.Variable(tf.truncated_normal([user_embedding_size + movie_embedding_size, 64], stddev=0.1))
+    B1 = tf.Variable(tf.zeros([64]))
+    W2 = tf.Variable(tf.truncated_normal([64, 64], stddev=0.1))
+    B2 = tf.Variable(tf.zeros([64]))
+    W3 = tf.Variable(tf.truncated_normal([64, 64], stddev=0.1))
+    B3 = tf.Variable(tf.zeros([64]))
+    W4 = tf.Variable(tf.truncated_normal([64, 1], stddev=0.1))
+    B4 = tf.Variable(tf.zeros([1]))
 
-train_data = netflix_data.DataSet.fromfile("nf_prize_dataset/nf_prize.npy")
+    Y1 = tf.nn.sigmoid(tf.matmul(X, W1) + B1)
+    Y2 = tf.nn.sigmoid(tf.matmul(Y1, W2) + B2)
+    Y3 = tf.nn.sigmoid(tf.matmul(Y2, W3) + B3)
+    Y = tf.matmul(Y3, W4) + B4
 
-train_batch_iter = train_data.iter_batch(512)
-def training_step(i, update_test_data, update_train_data):
-    batch = next(train_batch_iter)
+    mse = tf.reduce_mean(tf.square(tf.cast(ratings, tf.float32) - Y))
+    loss = (mse + REGULARIZATION_FACTOR*(
+           tf.reduce_mean(tf.square(embedded_users)) +
+           tf.reduce_mean(tf.square(embedded_movies))))
 
-    # compute training values for visualisation
-    if update_train_data:
-        a, m, l, w, b = sess.run([accuracy, tf.sqrt(mse), loss, allweights, allbiases],
-                              feed_dict={user_ids: batch.users, movie_ids: batch.movies, ratings: batch.ratings})
-        datavis.append_training_curves_data(i, a, l)
-        datavis.append_data_histograms(i, w, b)
-        print(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
+    correct_prediction = tf.equal(tf.round(Y), tf.cast(ratings, tf.float32))
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    # compute test values for visualisation
-    """if update_test_data:
-        a, c, im = sess.run([accuracy, cross_entropy, It], feed_dict={X: mnist.test.images, Y_: mnist.test.labels})
-        datavis.append_test_curves_data(i, a, c)
-        datavis.update_image2(im)
-        print(str(i) + ": ********* epoch " + str(
-            i * 100 // mnist.train.images.shape[0] + 1) + " ********* test accuracy:" + str(a) + " test loss: " + str(
-            c))"""
+    # training, learning rate = 0.005
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=global_step)
 
-    # the backpropagation training step
-    sess.run(train_step, feed_dict={user_ids: batch.users, movie_ids: batch.movies, ratings: batch.ratings})
+    # init
+    logging.debug('Initializing model')
+    init = tf.global_variables_initializer()
+    sess = tf.Session()
+    sess.run(init)
+    saver = tf.train.Saver()
+    if args.checkpoint is not None and os.path.exists(os.path.join(LOG_DIR, 'checkpoint')):
+        if args.checkpoint == -1:
+            saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
+        else:
+            saver.restore(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt-"+str(args.checkpoint)))
+        logging.debug('Model restored to step ' + str(global_step.eval(sess)))
+    #elif os.path.exists(os.path.join("log", "netflix_0.0_latent", 'checkpoint')):
+    #    loader = tf.train.Saver({"user_embeddings": user_embeddings, "movie_embeddings": movie_embeddings, "user_bias": user_bias, "movie_bias": movie_bias})
+    #    loader.restore(sess, tf.train.latest_checkpoint("log/netflix_0.0_latent"))
 
-datavis.animate(training_step, iterations=100000+1, train_data_update_freq=20, test_data_update_freq=100, more_tests_at_start=True)
+
+    # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
+    config = projector.ProjectorConfig()
+
+    # You can add multiple embeddings. Here we add only one.
+    embedding = config.embeddings.add()
+    embedding.tensor_name = movie_embeddings.name
+    # Link this tensor to its metadata file (e.g. labels).
+    embedding.metadata_path = '../movie_titles.tsv'
+
+    # Use the same LOG_DIR where you stored your checkpoint.
+    summary_writer = tf.summary.FileWriter(LOG_DIR)
+
+    # The next line writes a projector_config.pbtxt in the LOG_DIR. TensorBoard will
+    # read this file during startup.
+    projector.visualize_embeddings(summary_writer, config)
+
+    logging.debug('Loading netflix data')
+    data = netflix_data.DataSet.fromfile("nf_prize_dataset/nf_prize.npy").split(0, 5000)
+    train_batch_iter = data.train.iter_batch(BATCH_SIZE)
+
+    train_data_update_freq = 20
+    test_data_update_freq = 100
+    sess_save_freq = 5000
+
+    logging.debug('Training model')
+    while global_step.eval(sess) < n_iter:
+        batch = next(train_batch_iter)
+
+        # the backpropagation training step
+        sess.run(train_step, feed_dict={user_ids: batch.user_ids, movie_ids: batch.movie_ids, ratings: batch.ratings})
+        i = global_step.eval(sess)
+
+        # compute training values for visualisation
+        if i % train_data_update_freq == 0:
+            a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
+                                     feed_dict={user_ids: batch.user_ids, movie_ids: batch.movie_ids, ratings: batch.ratings})
+            logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
+
+        # compute test values for visualisation
+        if i % test_data_update_freq == 0:
+            a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
+                               feed_dict={user_ids: data.test.user_ids, movie_ids: data.test.movie_ids,
+                                          ratings: data.test.ratings})
+            logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
+                l) + " rmse: " + str(m))
+
+        if i % sess_save_freq == 0:
+            logging.debug('Saving model')
+            saver.save(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt"), global_step=i)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
