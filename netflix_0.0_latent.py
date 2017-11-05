@@ -10,9 +10,9 @@ import netflix_data
 
 DEFAULT_N_ITER = 500000
 BATCH_SIZE = 512
-REGULARIZATION_FACTOR = 0.01
-LEARNING_SPEED = 0.5
-LOG_DIR = "log"
+REGULARIZATION_FACTOR = 0.1
+LEARNING_SPEED = 0.2
+LOG_DIR = "log/netflix_0.0_latent"
 MODEL_NAME = "netflix_0.0_latent"
 
 
@@ -33,8 +33,8 @@ def main(argv):
     n_iter = args.n_iter
     logging.info("Number of iterations: " + str(n_iter))
 
-    user_embedding_size = 40
-    movie_embedding_size = 40
+    user_embedding_size = 60
+    movie_embedding_size = 60
 
     user_ids = tf.placeholder(tf.int32, shape=[None])
     movie_ids = tf.placeholder(tf.int32, shape=[None])
@@ -55,8 +55,8 @@ def main(argv):
 
     mse = tf.reduce_mean(tf.square(tf.cast(ratings, tf.float32) - Y))
     loss = (mse + REGULARIZATION_FACTOR*(
-           tf.reduce_mean(tf.square(embedded_users)) +
-           tf.reduce_mean(tf.square(embedded_movies)) +
+           tf.reduce_mean(tf.reduce_sum(tf.square(embedded_users), 1)) +
+           tf.reduce_mean(tf.reduce_sum(tf.square(embedded_movies), 1)) +
            tf.reduce_mean(tf.square(tf.gather(user_bias, user_ids))) +
            tf.reduce_mean(tf.square(tf.gather(movie_bias, movie_ids)))))
 
@@ -72,11 +72,11 @@ def main(argv):
     sess = tf.Session()
     sess.run(init)
     saver = tf.train.Saver()
-    if args.checkpoint != None:
+    if args.checkpoint is not None and os.path.exists(os.path.join(LOG_DIR, 'checkpoint')):
         if args.checkpoint == -1:
-            saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR, latest_filename=MODEL_NAME + '-checkpoint'))
+            saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
         else:
-            saver.restore(sess, os.path.join(LOG_DIR, MODEL_NAME) + "-" + str(args.checkpoint))
+            saver.restore(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt-"+str(args.checkpoint)))
         logging.debug('Model restored to step ' + str(global_step.eval(sess)))
 
     # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
@@ -86,10 +86,10 @@ def main(argv):
     embedding = config.embeddings.add()
     embedding.tensor_name = movie_embeddings.name
     # Link this tensor to its metadata file (e.g. labels).
-    embedding.metadata_path = 'movie_titles.tsv'
+    embedding.metadata_path = '../movie_titles.tsv'
 
     # Use the same LOG_DIR where you stored your checkpoint.
-    summary_writer = tf.summary.FileWriter(os.path.join(LOG_DIR, MODEL_NAME))
+    summary_writer = tf.summary.FileWriter(LOG_DIR)
 
     # The next line writes a projector_config.pbtxt in the LOG_DIR. TensorBoard will
     # read this file during startup.
@@ -127,7 +127,7 @@ def main(argv):
 
         if i % sess_save_freq == 0:
             logging.debug('Saving model')
-            saver.save(sess, os.path.join(LOG_DIR, MODEL_NAME), latest_filename=MODEL_NAME + '-checkpoint', global_step=i)
+            saver.save(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt"), global_step=i)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
