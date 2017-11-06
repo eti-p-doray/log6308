@@ -48,10 +48,8 @@ class DataSet(object):
         return self.ratings_
 
     def iter_batch(self, batch_size, shuffle=True):
-        perm = numpy.arange(self.num_examples)
-        numpy.random.shuffle(perm)
-        for i in range(0, len(perm), batch_size):
-            indices = perm[i:min(i+batch_size, len(perm))]
+        while True:
+            indices = numpy.random.choice(self.num_examples, batch_size)
             movie_ids = self.movie_ids_[indices]
             user_ids = self.user_ids_[indices]
             dates = self.dates_[indices]
