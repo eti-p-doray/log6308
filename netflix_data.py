@@ -80,6 +80,42 @@ class DataSet(object):
     def save(self, filename):
         numpy.save(filename, numpy.vstack((self.movie_ids_, self.user_ids_, self.dates_, self.ratings_)))
 
+    def make_probe_subset(self, probe_file_path):
+        couples = set()
+
+        with open(probe_file_path, 'r') as probe_file:
+            last_movie_id = None
+            n_couples = 0
+            for line in probe_file:
+                if line: #not empty
+                    idx = line.find(':')
+                    if idx > 0: #movie id
+                        last_movie_id = int(line[0:idx])
+                    else: #user id
+                        couples.add((last_movie_id, int(line)))
+                        n_couples = n_couples + 1
+
+        ratings = numpy.zeros(n_couples, dtype=numpy.int8)
+        movieids = numpy.zeros(n_couples, dtype=numpy.int16)
+        userids = numpy.zeros(n_couples, dtype=numpy.int32)
+        dates = numpy.zeros(n_couples, dtype=numpy.int32)
+
+        print(couples)
+
+        k = 0
+        for i, movie_id in enumerate(self.movie_ids_):
+            user_id = self.user_ids_[i]
+            if len(couples & {(movie_id, user_id)}) > 0:
+                userids[k] = user_id
+                movieids[k] = movie_id
+                ratings[k] = self.ratings_[i]
+                dates[k] = self.dates_[i]
+                k = k + 1
+
+                print((movie_id, user_id))
+
+        return DataSet(movieids, userids, dates, ratings)
+
 
 def read_data_sets(train_dir):
     epoch = datetime.datetime.utcfromtimestamp(0)
