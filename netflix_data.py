@@ -90,7 +90,7 @@ class DataSet(object):
                 if line: #not empty
                     idx = line.find(':')
                     if idx > 0: #movie id
-                        last_movie_id = int(line[0:idx])
+                        last_movie_id = int(line[0:idx]) - 1
                     else: #user id
                         couples.add((last_movie_id, int(line)))
                         n_couples = n_couples + 1
@@ -100,19 +100,17 @@ class DataSet(object):
         userids = numpy.zeros(n_couples, dtype=numpy.int32)
         dates = numpy.zeros(n_couples, dtype=numpy.int32)
 
-        print(couples)
+        users = numpy.load('nf_prize_dataset/users.npy')
 
         k = 0
         for i, movie_id in enumerate(self.movie_ids_):
-            user_id = self.user_ids_[i]
-            if len(couples & {(movie_id, user_id)}) > 0:
+            user_id = users[self.user_ids_[i]]
+            if (movie_id, user_id) in couples:
                 userids[k] = user_id
                 movieids[k] = movie_id
                 ratings[k] = self.ratings_[i]
                 dates[k] = self.dates_[i]
                 k = k + 1
-
-                print((movie_id, user_id))
 
         return DataSet(movieids, userids, dates, ratings)
 
