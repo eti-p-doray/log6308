@@ -26,6 +26,8 @@ def main(argv):
     """, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_prize.npy',
                         help='Netflix input data input file.')
+    parser.add_argument('-t', '--test_set', default = 'nf_prize_dataset/nf_mini_probe.npy',
+                        help='Netflix test set input file') #TODO Change default
     parser.add_argument('--checkpoint', type=int, default=None,
                         help='Saved session checkpoint, -1 for latest')
     parser.add_argument('--n_iter', type=int, default=DEFAULT_N_ITER,
@@ -136,8 +138,9 @@ def main(argv):
     ############################################################################
     ## Data loading in batches of 5000
     logging.debug('Loading netflix data')
-    data = netflix_data.DataSet.fromfile("nf_prize_dataset/nf_prize.npy").split(0, 5000)
-    train_batch_iter = data.train.iter_batch(BATCH_SIZE)
+    data = netflix_data.DataSet.fromfile(args.input)
+    train_batch_iter = data.iter_batch(BATCH_SIZE)
+    test_data = netflix_data.DataSet.fromfile(args.test_set)
 
     ############################################################################
     ## Training loop.
@@ -163,8 +166,8 @@ def main(argv):
         # compute test values for visualisation
         if i % test_data_update_freq == 0:
             a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
-                               feed_dict={user_ids: data.test.user_ids, movie_ids: data.test.movie_ids,
-                                          ratings: data.test.ratings})
+                               feed_dict={user_ids: test_data.user_ids, movie_ids: test_data.movie_ids,
+                                          ratings: test_data.ratings})
             logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
                 l) + " rmse: " + str(m))
 

@@ -80,7 +80,7 @@ class DataSet(object):
     def save(self, filename):
         numpy.save(filename, numpy.vstack((self.movie_ids_, self.user_ids_, self.dates_, self.ratings_)))
 
-    def make_probe_subset(self, probe_file_path):
+    def split_probe_subset(self, probe_file_path):
         couples = set()
 
         with open(probe_file_path, 'r') as probe_file:
@@ -95,24 +95,39 @@ class DataSet(object):
                         couples.add((last_movie_id, int(line)))
                         n_couples = n_couples + 1
 
-        ratings = numpy.zeros(n_couples, dtype=numpy.int8)
-        movieids = numpy.zeros(n_couples, dtype=numpy.int16)
-        userids = numpy.zeros(n_couples, dtype=numpy.int32)
-        dates = numpy.zeros(n_couples, dtype=numpy.int32)
+        test_ratings = numpy.zeros(n_couples, dtype=numpy.int8)
+        test_movieids = numpy.zeros(n_couples, dtype=numpy.int16)
+        test_userids = numpy.zeros(n_couples, dtype=numpy.int32)
+        test_dates = numpy.zeros(n_couples, dtype=numpy.int32)
+
+        training_size = NUM_RATING - n_couples
+        training_ratings = numpy.zeros(training_size, dtype=numpy.int8)
+        training_movieids = numpy.zeros(training_size, dtype=numpy.int16)
+        training_userids = numpy.zeros(training_size, dtype=numpy.int32)
+        training_dates = numpy.zeros(training_size, dtype=numpy.int32)
 
         users = numpy.load('nf_prize_dataset/users.npy')
 
+        j = 0
         k = 0
         for i, movie_id in enumerate(self.movie_ids_):
-            user_id = users[self.user_ids_[i]]
-            if (movie_id, user_id) in couples:
-                userids[k] = user_id
-                movieids[k] = movie_id
-                ratings[k] = self.ratings_[i]
-                dates[k] = self.dates_[i]
+            user_id = self.user_ids_[i]
+            if (movie_id, users[user_id]) in couples:
+                test_userids[k] = user_id
+                test_movieids[k] = movie_id
+                test_ratings[k] = self.ratings_[i]
+                test_dates[k] = self.dates_[i]
                 k = k + 1
+            else:
+                training_userids[j] = user_id
+                training_movieids[j] = movie_id
+                training_ratings[j] = self.ratings_[i]
+                training_dates[j] = self.dates_[i]
+                j = j + 1
 
-        return DataSet(movieids, userids, dates, ratings)
+        print(j, " ", k)
+        ## Returns Test_set, Training_set, both complementary
+        return DataSet(test_movieids, test_userids, test_dates, test_ratings), DataSet(training_movieids, training_userids, training_dates, training_ratings)
 
 
 def read_data_sets(train_dir):
