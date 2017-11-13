@@ -10,15 +10,15 @@ import tensorflow as tf
 # Constants
 DEFAULT_N_ITER = 500000
 BATCH_SIZE = 512
-REGULARIZATION_FACTOR = 0.1
-LEARNING_SPEED = 0.5
+REGULARIZATION_FACTOR = 0.5
+LEARNING_SPEED = 1.0
 MODEL_NAME = "netflix_1.0_collaborative"
 
 #Main Script
 def main(argv):
     utils = NetflixUtils(MODEL_NAME, DEFAULT_N_ITER)
-
     utils.parse_args(argv)
+    utils.load_data()
 
     ############################################################################
     ## Description of the TensorFlow model.
@@ -70,7 +70,7 @@ def main(argv):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # training, learning rate = 0.005
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
+    train_step = tf.train.AdadeltaOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     ############################################################################
     ## Session Initialization and restoration
@@ -86,7 +86,7 @@ def main(argv):
     ## Training loop.
 
     train_data_update_freq = 20
-    test_data_update_freq = 100
+    test_data_update_freq = 1000
     sess_save_freq = 5000
 
     utils.train_model(sess, train_step, accuracy, rmse, loss,

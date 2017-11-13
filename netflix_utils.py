@@ -26,6 +26,8 @@ class NetflixUtils(object):
         self.ratings_ = None
         self.global_step_ = None
         self.saver_ = None
+        self.data_ = None
+        self.test_data_ = None
 
     @property
     def args(self):
@@ -123,15 +125,16 @@ class NetflixUtils(object):
         # TensorBoard will read this file during startup.
         projector.visualize_embeddings(summary_writer, config)
 
+    def load_data(self):
+        logging.debug('Loading netflix data')
+        self.data = netflix_data.DataSet.fromfile(self.args_.input)
+        self.test_data = netflix_data.DataSet.fromfile(self.args_.test_set)
+
     def train_model(self, sess, train_step, accuracy, rmse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, batch_size):
 
-        logging.debug('Loading netflix data')
-        data = netflix_data.DataSet.fromfile(self.args_.input)
-        train_batch_iter = data.iter_batch(batch_size)
-        test_data = netflix_data.DataSet.fromfile(self.args_.test_set)
-
+        train_batch_iter = self.data.iter_batch(batch_size)
         logging.debug('Training model')
         while self.global_step_.eval(sess) < self.args_.n_iter:
             batch = next(train_batch_iter) # next batch of data to train on.
@@ -149,8 +152,8 @@ class NetflixUtils(object):
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
                 a, m, l = sess.run([accuracy, rmse, loss],
-                                   feed_dict={self.user_ids_: test_data.user_ids, self.movie_ids_: test_data.movie_ids,
-                                              self.ratings_: test_data.ratings})
+                                   feed_dict={self.user_ids_: self.test_data.user_ids, self.movie_ids_: self.test_data.movie_ids,
+                                              self.ratings_: self.test_data.ratings})
                 logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
                     l) + " rmse: " + str(m))
 

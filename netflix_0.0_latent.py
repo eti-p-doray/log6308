@@ -1,21 +1,23 @@
 import logging
 import sys
+import numpy
 
 from netflix_utils import NetflixUtils
 import netflix_data
 
 import tensorflow as tf
 
-DEFAULT_N_ITER = 500000
 BATCH_SIZE = 512
-REGULARIZATION_FACTOR = 0.1
-LEARNING_SPEED = 0.2
+DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
+REGULARIZATION_FACTOR = 0.5
+LEARNING_SPEED = 0.5
 MODEL_NAME = "netflix_0.0_latent"
 
 
 def main(argv):
     utils = NetflixUtils(MODEL_NAME, DEFAULT_N_ITER)
     utils.parse_args(argv)
+    utils.load_data()
 
     user_embedding_size = 60
     movie_embedding_size = 60
@@ -23,18 +25,18 @@ def main(argv):
     utils.init_tensorflow()
     #Trainable embeddings for users. Tensor format n_user x user_embedding_size.
     #Initialized randomly accorded to a truncated normal distribution
-    user_embeddings = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.01), trainable=True)
+    user_embeddings = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.1), trainable=True)
     embedded_users = tf.gather(user_embeddings, utils.user_ids) #Loads embeddings of currently treated users.
 
     #Trainable embeddings for movies. Tensor format n_movie x movie_embedding_size.
     #Initialized randomly accorded to a truncated normal distribution
-    movie_embeddings = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.01), trainable=True)
+    movie_embeddings = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.1), trainable=True)
     embedded_movies = tf.gather(movie_embeddings, utils.movie_ids)#Loads embeddings of currently treated movies.
 
     user_bias = tf.get_variable("user_bias", initializer=tf.zeros([netflix_data.USER_COUNT]))
     movie_bias = tf.get_variable("movie_bias", initializer=tf.zeros([netflix_data.MOVIE_COUNT]))
 
-    B = tf.Variable(tf.zeros([1]))
+    B = numpy.mean(utils.data.ratings)
     Y = tf.reduce_sum(tf.multiply(embedded_movies, embedded_users), 1) + tf.gather(user_bias, utils.user_ids) + tf.gather(movie_bias, utils.movie_ids) + B
 
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
@@ -49,7 +51,7 @@ def main(argv):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # training, learning rate = 0.005
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
+    train_step = tf.train.AdadeltaOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     # init
     logging.debug('Initializing model')
@@ -61,7 +63,7 @@ def main(argv):
     utils.setup_projector(movie_embeddings.name)
 
     train_data_update_freq = 20
-    test_data_update_freq = 100
+    test_data_update_freq = 1000
     sess_save_freq = 5000
 
     utils.train_model(sess, train_step, accuracy, rmse, loss,
