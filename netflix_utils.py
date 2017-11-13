@@ -123,7 +123,7 @@ class NetflixUtils(object):
         # TensorBoard will read this file during startup.
         projector.visualize_embeddings(summary_writer, config)
 
-    def train_model(self, sess, train_step, accuracy, mse, loss,
+    def train_model(self, sess, train_step, accuracy, rmse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, batch_size):
 
@@ -142,13 +142,13 @@ class NetflixUtils(object):
 
             # compute training values for visualisation.
             if i % train_data_update_freq == 0:
-                a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
+                a, m, l = sess.run([accuracy, rmse, loss],
                                          feed_dict={self.user_ids_: batch.user_ids, self.movie_ids_: batch.movie_ids, self.ratings_: batch.ratings})
                 logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
 
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
-                a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
+                a, m, l = sess.run([accuracy, rmse, loss],
                                    feed_dict={self.user_ids_: test_data.user_ids, self.movie_ids_: test_data.movie_ids,
                                               self.ratings_: test_data.ratings})
                 logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
