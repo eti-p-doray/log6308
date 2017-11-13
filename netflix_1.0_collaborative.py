@@ -16,6 +16,8 @@ MODEL_NAME = "netflix_1.0_collaborative"
 
 #Main Script
 def main(argv):
+    ############################################################################
+    # Initilizing the utility object for common tasks among our models
     utils = NetflixUtils(MODEL_NAME, DEFAULT_N_ITER)
     utils.parse_args(argv)
     utils.load_data()
@@ -58,7 +60,8 @@ def main(argv):
     Y3 = tf.nn.sigmoid(tf.matmul(Y2, W3) + B3)
     Y = tf.matmul(Y3, W4) + B4
 
-    mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y)) #Error calculation
+    #Error calculation
+    mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
     rmse = tf.sqrt(mse)
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
@@ -69,7 +72,7 @@ def main(argv):
     correct_prediction = tf.equal(tf.round(Y), tf.cast(utils.ratings, tf.float32))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    # training, learning rate = 0.005
+    # training setup
     train_step = tf.train.AdadeltaOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     ############################################################################
