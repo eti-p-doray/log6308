@@ -1,70 +1,42 @@
-import argparse
 import logging
-import os
 import sys
 
-import tensorflow as tf
-from tensorflow.contrib.tensorboard.plugins import projector
-
+from netflix_utils import NetflixUtils
 import netflix_data
+
+import tensorflow as tf
+
 
 # Constants
 DEFAULT_N_ITER = 500000
 BATCH_SIZE = 512
 REGULARIZATION_FACTOR = 0.1
 LEARNING_SPEED = 0.5
-LOG_DIR = "log/netflix_1.0_collaborative"
 MODEL_NAME = "netflix_1.0_collaborative"
 
 #Main Script
 def main(argv):
-    ############################################################################
-    ## Building a parser to interpret the arguments given with the script.
-    ## Using -h with the script will show its description.
-    parser = argparse.ArgumentParser(description="""
-    Simple matrix factorization algorithm to find latent variables that represents netflix prize data.
-    """, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_prize.npy',
-                        help='Netflix input data input file.')
-    parser.add_argument('-t', '--test_set', default = 'nf_prize_dataset/nf_mini_probe.npy',
-                        help='Netflix test set input file') #TODO Change default
-    parser.add_argument('--checkpoint', type=int, default=None,
-                        help='Saved session checkpoint, -1 for latest')
-    parser.add_argument('--n_iter', type=int, default=DEFAULT_N_ITER,
-                        help='Total number of iterations')
+    utils = NetflixUtils(MODEL_NAME, DEFAULT_N_ITER)
 
-    # Configuring Log severity for future printing
-    logging.basicConfig(level=logging.DEBUG)
-
-    args = parser.parse_args() # Use the parser to get the arguments
-    n_iter = args.n_iter
-    logging.info("Number of iterations: " + str(n_iter))
-
+    utils.parse_args(argv)
 
     ############################################################################
     ## Description of the TensorFlow model.
-
     #Constants
     user_embedding_size = 20
     movie_embedding_size = 60
 
-    #Placeholders for data to be treated
-    user_ids = tf.placeholder(tf.int32, shape=[None])
-    movie_ids = tf.placeholder(tf.int32, shape=[None])
-    ratings = tf.placeholder(tf.int8, shape=[None])
-
-    #Global step(iteration) identifier. Will be incremented, not trained.
-    global_step = tf.get_variable('global_step', initializer=0, trainable=False)
+    utils.init_tensorflow()
 
     #Trainable embeddings for users. Tensor format n_user x user_embedding_size.
     #Initialized randomly accorded to a truncated normal distribution
     user_embeddings = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.01), trainable=True)
-    embedded_users = tf.gather(user_embeddings, user_ids) #Loads embeddings of currently treated users.
+    embedded_users = tf.gather(user_embeddings, utils.user_ids) #Loads embeddings of currently treated users.
 
     #Trainable embeddings for movies. Tensor format n_movie x movie_embedding_size.
     #Initialized randomly accorded to a truncated normal distribution
     movie_embeddings = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.01), trainable=True)
-    embedded_movies = tf.gather(movie_embeddings, movie_ids)#Loads embeddings of currently treated movies.
+    embedded_movies = tf.gather(movie_embeddings, utils.movie_ids)#Loads embeddings of currently treated movies.
 
     #Combine embeddings together along their 2nd dimension.
     #This should result into a tensor with user_embedding_size + movie_embedding_size embedddings
@@ -86,18 +58,19 @@ def main(argv):
     Y3 = tf.nn.sigmoid(tf.matmul(Y2, W3) + B3)
     Y = tf.matmul(Y3, W4) + B4
 
-    mse = tf.reduce_mean(tf.square(tf.cast(ratings, tf.float32) - Y)) #Error calculation
+    mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y)) #Error calculation
+    rmse = tf.sqrt(mse)
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
            tf.reduce_mean(tf.square(embedded_users)) +
            tf.reduce_mean(tf.square(embedded_movies))))
 
     # Metric : check if correct prediction and calculate accuracy.
-    correct_prediction = tf.equal(tf.round(Y), tf.cast(ratings, tf.float32))
+    correct_prediction = tf.equal(tf.round(Y), tf.cast(utils.ratings, tf.float32))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # training, learning rate = 0.005
-    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=global_step)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     ############################################################################
     ## Session Initialization and restoration
@@ -105,42 +78,9 @@ def main(argv):
     init = tf.global_variables_initializer()
     sess = tf.Session()
     sess.run(init)
-    saver = tf.train.Saver() #To be able to save and restore variable status
 
-    # If a checkpoint was given in argument to the script, we will import the
-    # variables' status as it was at that checkpoint. NB : -1 implies latest checkpoint.
-    if args.checkpoint is not None and os.path.exists(os.path.join(LOG_DIR, 'checkpoint')):
-        if args.checkpoint == -1: #latest checkpoint
-            saver.restore(sess, tf.train.latest_checkpoint(LOG_DIR))
-        else: #Specified checkpoint
-            saver.restore(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt-"+str(args.checkpoint)))
-        logging.debug('Model restored to step ' + str(global_step.eval(sess)))
-
-    ############################################################################
-    ## Visualisation configuration for TensorBoard
-
-    # Format: tensorflow/contrib/tensorboard/plugins/projector/projector_config.proto
-    config = projector.ProjectorConfig()
-
-    # You can add multiple embeddings. Here we add only one.
-    embedding = config.embeddings.add()
-    embedding.tensor_name = movie_embeddings.name
-    # Link this tensor to its metadata file (e.g. labels).
-    embedding.metadata_path = '../movie_titles.tsv'
-
-    # Use the same LOG_DIR where you stored your checkpoint.
-    summary_writer = tf.summary.FileWriter(LOG_DIR)
-
-    # The next line writes a projector_config.pbtxt in the LOG_DIR. TensorBoard will
-    # read this file during startup.
-    projector.visualize_embeddings(summary_writer, config)
-
-    ############################################################################
-    ## Data loading in batches of 5000
-    logging.debug('Loading netflix data')
-    data = netflix_data.DataSet.fromfile(args.input)
-    train_batch_iter = data.iter_batch(BATCH_SIZE)
-    test_data = netflix_data.DataSet.fromfile(args.test_set)
+    utils.restore_existing_checkpoint(sess)
+    utils.setup_projector(movie_embeddings.name)
 
     ############################################################################
     ## Training loop.
@@ -149,32 +89,9 @@ def main(argv):
     test_data_update_freq = 100
     sess_save_freq = 5000
 
-    logging.debug('Training model')
-    while global_step.eval(sess) < n_iter:
-        batch = next(train_batch_iter) # next batch of data to train on.
-
-        # the backpropagation training step
-        sess.run(train_step, feed_dict={user_ids: batch.user_ids, movie_ids: batch.movie_ids, ratings: batch.ratings})
-        i = global_step.eval(sess)
-
-        # compute training values for visualisation.
-        if i % train_data_update_freq == 0:
-            a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
-                                     feed_dict={user_ids: batch.user_ids, movie_ids: batch.movie_ids, ratings: batch.ratings})
-            logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
-
-        # compute test values for visualisation
-        if i % test_data_update_freq == 0:
-            a, m, l = sess.run([accuracy, tf.sqrt(mse), loss],
-                               feed_dict={user_ids: test_data.user_ids, movie_ids: test_data.movie_ids,
-                                          ratings: test_data.ratings})
-            logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
-                l) + " rmse: " + str(m))
-
-        # Saving training progress
-        if i % sess_save_freq == 0:
-            logging.debug('Saving model')
-            saver.save(sess, os.path.join(LOG_DIR, MODEL_NAME+".ckpt"), global_step=i)
+    utils.train_model(sess, train_step, accuracy, rmse, loss,
+                    train_data_update_freq, test_data_update_freq,
+                    sess_save_freq, BATCH_SIZE)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
