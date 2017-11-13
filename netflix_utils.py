@@ -23,11 +23,12 @@ class NetflixUtils(object):
         self.default_n_iter_ = default_n_iter
         self.user_ids_ = None
         self.movie_ids_ = None
+        self.dates_ = None
         self.ratings_ = None
         self.global_step_ = None
         self.saver_ = None
-        self.data_ = None
-        self.test_data_ = None
+        self.training_set_ = None
+        self.test_set_ = None
 
     @property
     def args(self):
@@ -50,12 +51,24 @@ class NetflixUtils(object):
         return self.movie_ids_
 
     @property
+    def dates(self):
+        return self.dates_
+
+    @property
     def ratings(self):
         return self.ratings_
 
     @property
     def global_step(self):
         return self.global_step_
+
+    @property
+    def training_set(self):
+        return self.training_set_
+
+    @property
+    def test_set(self):
+        return self.test_set_
 
     @property
     def saver(self):
@@ -89,6 +102,7 @@ class NetflixUtils(object):
         #Placeholders for data to be treated
         self.user_ids_ = tf.placeholder(tf.int32, shape=[None])
         self.movie_ids_ = tf.placeholder(tf.int32, shape=[None])
+        self.dates_ = tf.placeholder(tf.int32, shape=[None])
         self.ratings_ = tf.placeholder(tf.int8, shape=[None])
 
         #Global step(iteration) identifier. Will be incremented, not trained.
@@ -127,33 +141,41 @@ class NetflixUtils(object):
 
     def load_data(self):
         logging.debug('Loading netflix data')
-        self.data = netflix_data.DataSet.fromfile(self.args_.input)
-        self.test_data = netflix_data.DataSet.fromfile(self.args_.test_set)
+        self.training_set_ = netflix_data.DataSet.fromfile(self.args_.input)
+        self.test_set_ = netflix_data.DataSet.fromfile(self.args_.test_set)
 
     def train_model(self, sess, train_step, accuracy, rmse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, batch_size):
 
-        train_batch_iter = self.data.iter_batch(batch_size)
+        train_batch_iter = self.training_set.iter_batch(batch_size)
         logging.debug('Training model')
         while self.global_step_.eval(sess) < self.args_.n_iter:
             batch = next(train_batch_iter) # next batch of data to train on.
 
             # the backpropagation training step
-            sess.run(train_step, feed_dict={self.user_ids_: batch.user_ids, self.movie_ids_: batch.movie_ids, self.ratings_: batch.ratings})
+            sess.run(train_step, feed_dict={self.user_ids_: batch.user_ids,
+                                            self.movie_ids_: batch.movie_ids,
+                                            self.dates_ : batch.dates,
+                                            self.ratings_: batch.ratings})
             i = self.global_step_.eval(sess)
 
             # compute training values for visualisation.
             if i % train_data_update_freq == 0:
                 a, m, l = sess.run([accuracy, rmse, loss],
-                                         feed_dict={self.user_ids_: batch.user_ids, self.movie_ids_: batch.movie_ids, self.ratings_: batch.ratings})
+                                         feed_dict={self.user_ids_: batch.user_ids,
+                                                    self.movie_ids_: batch.movie_ids,
+                                                    self.dates_ : batch.dates,
+                                                    self.ratings_: batch.ratings})
                 logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
 
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
                 a, m, l = sess.run([accuracy, rmse, loss],
-                                   feed_dict={self.user_ids_: self.test_data.user_ids, self.movie_ids_: self.test_data.movie_ids,
-                                              self.ratings_: self.test_data.ratings})
+                                   feed_dict={self.user_ids_: self.test_set.user_ids,
+                                              self.movie_ids_: self.test_set.movie_ids,
+                                              self.dates_: self.test_set.dates,
+                                              self.ratings_: self.test_set.ratings})
                 logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
                     l) + " rmse: " + str(m))
 

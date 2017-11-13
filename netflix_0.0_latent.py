@@ -36,7 +36,7 @@ def main(argv):
     user_bias = tf.get_variable("user_bias", initializer=tf.zeros([netflix_data.USER_COUNT]))
     movie_bias = tf.get_variable("movie_bias", initializer=tf.zeros([netflix_data.MOVIE_COUNT]))
 
-    B = numpy.mean(utils.data.ratings)
+    B = numpy.mean(utils.training_set.ratings)
     Y = tf.reduce_sum(tf.multiply(embedded_movies, embedded_users), 1) + tf.gather(user_bias, utils.user_ids) + tf.gather(movie_bias, utils.movie_ids) + B
 
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
