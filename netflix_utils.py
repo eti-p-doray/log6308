@@ -25,10 +25,6 @@ class NetflixUtils(object):
         self.movie_ids_ = None
         self.ratings_ = None
         self.global_step_ = None
-        self.embedded_users_ = None
-        self.embedded_movies_ = None
-        self.user_embeddings_ = None
-        self.movie_embeddings_ = None
         self.saver_ = None
 
     @property
@@ -60,22 +56,6 @@ class NetflixUtils(object):
         return self.global_step_
 
     @property
-    def embedded_users(self):
-        return self.embedded_users_
-
-    @property
-    def embedded_movies(self):
-        return self.embedded_movies_
-
-    @property
-    def user_embeddings(self):
-        return self.user_embeddings_
-
-    @property
-    def movie_embeddings(self):
-        return self.movie_embeddings_
-
-    @property
     def saver(self):
         return self.saver_
 
@@ -103,7 +83,7 @@ class NetflixUtils(object):
         self.args_ = parser.parse_args(argv) # Use the parser to get the arguments
         logging.info("Number of iterations: " + str(self.args_.n_iter))
 
-    def init_tensorflow(self, user_embedding_size, movie_embedding_size, trainable = False):
+    def init_tensorflow(self):
         #Placeholders for data to be treated
         self.user_ids_ = tf.placeholder(tf.int32, shape=[None])
         self.movie_ids_ = tf.placeholder(tf.int32, shape=[None])
@@ -111,16 +91,6 @@ class NetflixUtils(object):
 
         #Global step(iteration) identifier. Will be incremented, not trained.
         self.global_step_ = tf.get_variable('global_step', initializer=0, trainable=False)
-
-        #Trainable embeddings for users. Tensor format n_user x user_embedding_size.
-        #Initialized randomly accorded to a truncated normal distribution
-        self.user_embeddings_ = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.01), trainable=trainable)
-        self.embedded_users_ = tf.gather(self.user_embeddings_, self.user_ids_) #Loads embeddings of currently treated users.
-
-        #Trainable embeddings for movies. Tensor format n_movie x movie_embedding_size.
-        #Initialized randomly accorded to a truncated normal distribution
-        self.movie_embeddings_ = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.01), trainable=trainable)
-        self.embedded_movies_ = tf.gather(self.movie_embeddings_, self.movie_ids_)#Loads embeddings of currently treated movies.
 
     def restore_existing_checkpoint(self, sess):
         self.saver_ = tf.train.Saver() #To be able to save and restore variable status
@@ -133,7 +103,7 @@ class NetflixUtils(object):
                 self.saver_.restore(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt-"+str(self.args_.checkpoint)))
             logging.debug('Model restored to step ' + str(self.global_step_.eval(sess)))
 
-    def setup_projector(self):
+    def setup_projector(self, movie_tensor_name):
         ############################################################################
         ## Visualisation configuration for TensorBoard
 
@@ -142,7 +112,7 @@ class NetflixUtils(object):
 
         # You can add multiple embeddings. Here we add only one.
         embedding = config.embeddings.add()
-        embedding.tensor_name = self.movie_embeddings_.name
+        embedding.tensor_name = movie_tensor_name
         # Link this tensor to its metadata file (e.g. labels).
         embedding.metadata_path = '../movie_titles.tsv'
 

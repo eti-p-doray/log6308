@@ -2,6 +2,7 @@ import logging
 import sys
 
 from netflix_utils import NetflixUtils
+import netflix_data
 
 import tensorflow as tf
 
@@ -25,11 +26,21 @@ def main(argv):
     user_embedding_size = 20
     movie_embedding_size = 60
 
-    utils.init_tensorflow(user_embedding_size, movie_embedding_size, True)
+    utils.init_tensorflow()
+
+    #Trainable embeddings for users. Tensor format n_user x user_embedding_size.
+    #Initialized randomly accorded to a truncated normal distribution
+    user_embeddings = tf.get_variable("user_embeddings", initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.01), trainable=True)
+    embedded_users = tf.gather(user_embeddings, utils.user_ids) #Loads embeddings of currently treated users.
+
+    #Trainable embeddings for movies. Tensor format n_movie x movie_embedding_size.
+    #Initialized randomly accorded to a truncated normal distribution
+    movie_embeddings = tf.get_variable("movie_embeddings", initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size], stddev=0.01), trainable=True)
+    embedded_movies = tf.gather(movie_embeddings, utils.movie_ids)#Loads embeddings of currently treated movies.
 
     #Combine embeddings together along their 2nd dimension.
     #This should result into a tensor with user_embedding_size + movie_embedding_size embedddings
-    X = tf.concat((utils.embedded_users, utils.embedded_movies), 1)
+    X = tf.concat((embedded_users, embedded_movies), 1)
 
     ## Weights and Biases, trainable
     W1 = tf.Variable(tf.truncated_normal([user_embedding_size + movie_embedding_size, 64], stddev=0.1))
@@ -50,8 +61,8 @@ def main(argv):
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y)) #Error calculation
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
-           tf.reduce_mean(tf.square(utils.embedded_users)) +
-           tf.reduce_mean(tf.square(utils.embedded_movies))))
+           tf.reduce_mean(tf.square(embedded_users)) +
+           tf.reduce_mean(tf.square(embedded_movies))))
 
     # Metric : check if correct prediction and calculate accuracy.
     correct_prediction = tf.equal(tf.round(Y), tf.cast(utils.ratings, tf.float32))
@@ -68,7 +79,7 @@ def main(argv):
     sess.run(init)
 
     utils.restore_existing_checkpoint(sess)
-    utils.setup_projector()
+    utils.setup_projector(movie_embeddings.name)
 
     ############################################################################
     ## Training loop.
