@@ -85,15 +85,15 @@ class NetflixUtils(object):
         parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_probe_training.npy',
                             help='Netflix input data input file.')
         parser.add_argument('-t', '--test_set', default = 'nf_prize_dataset/nf_probe.npy',
-                            help='Netflix test set input file')
+                            help='Netflix test set input file.')
         parser.add_argument('--checkpoint', type=int, default=None,
-                            help='Saved session checkpoint, -1 for latest')
+                            help='Saved session checkpoint, -1 for latest.')
         parser.add_argument('--n_iter', type=int, default=self.default_n_iter_,
-                            help='Total number of iterations')
+                            help='Total number of iterations.')
         parser.add_argument('--logdir', default="log/" + self.model_name_,
-                            help='Directory where logs should be written')
-        parser.add_argument('--out_type', default=None,
-                            help='Type of output to produce in logs')
+                            help='Directory where logs should be written.')
+        parser.add_argument('--log_perf', action='store_true',
+                            help='Enables performance logging.')
 
         # Configuring Log severity for future printing
         logging.basicConfig(level=logging.DEBUG)
@@ -148,22 +148,18 @@ class NetflixUtils(object):
         self.test_set_ = netflix_data.DataSet.fromfile(self.args_.test_set)
 
     def save_perfo(self, values, clear = False):
-        if self.args.out_type is not None:
-            if self.args.out_type == 'csv':
-                logging.debug("before open")
+        if self.args.log_perf:
+            if (clear):
+                mode = 'w'
+            else:
+                mode = 'a'
+            with open(os.path.join(self.args_.logdir, 'performance.csv'), mode, newline='') as csvfile:
+                csvwriter = csv.writer(csvfile, delimiter=',',
+                        quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 if (clear):
-                    logging.debug('clearing')
-                    mode = 'w'
-                else:
-                    mode = 'a'
-                with open(os.path.join(self.args_.logdir, 'performance.csv'), mode, newline='') as csvfile:
-                    csvwriter = csv.writer(csvfile, delimiter=',',
-                            quotechar='|', quoting=csv.QUOTE_MINIMAL)
-                    if (clear):
-                        csvwriter.writerow(("i", "Accuracy", "RMSE", "Loss", "Is_Test"))
-                    logging.debug("after header")
-                    for value in values:
-                        csvwriter.writerow(value)
+                    csvwriter.writerow(("i", "Accuracy", "RMSE", "Loss", "Is_Test"))
+                for value in values:
+                    csvwriter.writerow(value)
 
     def train_model(self, sess, train_step, accuracy, rmse, loss,
                     train_data_update_freq, test_data_update_freq,
