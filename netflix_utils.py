@@ -147,17 +147,15 @@ class NetflixUtils(object):
         self.training_set_ = netflix_data.DataSet.fromfile(self.args_.input)
         self.test_set_ = netflix_data.DataSet.fromfile(self.args_.test_set)
 
-    def save_perfo(self, values, clear = False):
+    def save_perfo(self, values, is_test, clear = False):
         if self.args.log_perf:
-            if (clear):
-                mode = 'w'
-            else:
-                mode = 'a'
-            with open(os.path.join(self.args_.logdir, 'performance.csv'), mode, newline='') as csvfile:
+            mode = 'w' if (clear) else 'a'
+            filename = 'perf_test.csv' if (is_test) else 'perf_train.csv'
+            with open(os.path.join(self.args_.logdir, filename), mode, newline='') as csvfile:
                 csvwriter = csv.writer(csvfile, delimiter=',',
                         quotechar='|', quoting=csv.QUOTE_MINIMAL)
                 if (clear):
-                    csvwriter.writerow(("i", "Accuracy", "RMSE", "Loss", "Is_Test"))
+                    csvwriter.writerow(("i", "Accuracy", "RMSE", "Loss"))
                 for value in values:
                     csvwriter.writerow(value)
 
@@ -167,7 +165,8 @@ class NetflixUtils(object):
 
         train_batch_iter = self.training_set.iter_batch(batch_size)
         logging.debug('Training model')
-        perfo_results = []
+        training_results = []
+        test_results = []
         first_write = True
         while self.global_step_.eval(sess) < self.args_.n_iter:
             batch = next(train_batch_iter) # next batch of data to train on.
@@ -187,7 +186,7 @@ class NetflixUtils(object):
                                                     self.dates_ : batch.dates,
                                                     self.ratings_: batch.ratings})
                 logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
-                perfo_results.append((i, a, m, l, False))
+                training_results.append((i, a, m, l))
 
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
@@ -198,12 +197,14 @@ class NetflixUtils(object):
                                               self.ratings_: self.test_set.ratings})
                 logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
                     l) + " rmse: " + str(m))
-                perfo_results.append((i, a, m, l, True))
+                test_results.append((i, a, m, l))
 
             # Saving training progress
             if i % sess_save_freq == 0:
                 logging.debug('Saving model')
                 self.saver_.save(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt"), global_step=i)
-                self.save_perfo(perfo_results, first_write)
-                perfo_results = []
+                self.save_perfo(training_results, False, first_write)
+                training_results = []
+                self.save_perfo(test_results, True, first_write)
+                test_results = []
                 first_write = False
