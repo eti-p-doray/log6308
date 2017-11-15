@@ -3,6 +3,7 @@ import logging
 import tensorflow as tf
 import netflix_data
 import os
+import csv
 from tensorflow.contrib.tensorboard.plugins import projector
 
 class NetflixUtils(object):
@@ -29,6 +30,7 @@ class NetflixUtils(object):
         self.saver_ = None
         self.training_set_ = None
         self.test_set_ = None
+        self.first_write = True
 
     @property
     def args(self):
@@ -84,13 +86,15 @@ class NetflixUtils(object):
         parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_probe_training.npy',
                             help='Netflix input data input file.')
         parser.add_argument('-t', '--test_set', default = 'nf_prize_dataset/nf_probe.npy',
-                            help='Netflix test set input file')
+                            help='Netflix test set input file.')
         parser.add_argument('--checkpoint', type=int, default=None,
-                            help='Saved session checkpoint, -1 for latest')
+                            help='Saved session checkpoint, -1 for latest.')
         parser.add_argument('--n_iter', type=int, default=self.default_n_iter_,
-                            help='Total number of iterations')
+                            help='Total number of iterations.')
         parser.add_argument('--logdir', default="log/" + self.model_name_,
-                            help='Directory where logs should be written')
+                            help='Directory where logs should be written.')
+        parser.add_argument('--log_perf', action='store_true',
+                            help='Enables performance logging.')
 
         # Configuring Log severity for future printing
         logging.basicConfig(level=logging.DEBUG)
@@ -117,6 +121,7 @@ class NetflixUtils(object):
                 self.saver_.restore(sess, tf.train.latest_checkpoint(self.args_.logdir))
             else:#Specified checkpoint
                 self.saver_.restore(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt-"+str(self.args_.checkpoint)))
+            self.first_write = False
             logging.debug('Model restored to step ' + str(self.global_step_.eval(sess)))
 
     def setup_projector(self, movie_tensor_name):
@@ -144,12 +149,26 @@ class NetflixUtils(object):
         self.training_set_ = netflix_data.DataSet.fromfile(self.args_.input)
         self.test_set_ = netflix_data.DataSet.fromfile(self.args_.test_set)
 
+    def save_perfo(self, values, is_test, clear = False):
+        if self.args.log_perf:
+            mode = 'w' if (clear) else 'a'
+            filename = 'perf_test.csv' if (is_test) else 'perf_train.csv'
+            with open(os.path.join(self.args_.logdir, filename), mode, newline='') as csvfile:
+                csvwriter = csv.writer(csvfile, delimiter=',',
+                        quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                if (clear):
+                    csvwriter.writerow(("i", "Accuracy", "RMSE", "Loss"))
+                for value in values:
+                    csvwriter.writerow(value)
+
     def train_model(self, sess, train_step, accuracy, rmse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, batch_size):
 
         train_batch_iter = self.training_set.iter_batch(batch_size)
         logging.debug('Training model')
+        training_results = []
+        test_results = []
         while self.global_step_.eval(sess) < self.args_.n_iter:
             batch = next(train_batch_iter) # next batch of data to train on.
 
@@ -168,6 +187,7 @@ class NetflixUtils(object):
                                                     self.dates_ : batch.dates,
                                                     self.ratings_: batch.ratings})
                 logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
+                training_results.append((i, a, m, l))
 
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
@@ -178,8 +198,14 @@ class NetflixUtils(object):
                                               self.ratings_: self.test_set.ratings})
                 logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
                     l) + " rmse: " + str(m))
+                test_results.append((i, a, m, l))
 
             # Saving training progress
             if i % sess_save_freq == 0:
                 logging.debug('Saving model')
                 self.saver_.save(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt"), global_step=i)
+                self.save_perfo(training_results, False, self.first_write)
+                training_results = []
+                self.save_perfo(test_results, True, self.first_write)
+                test_results = []
+                self.first_write = False
