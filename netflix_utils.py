@@ -30,6 +30,7 @@ class NetflixUtils(object):
         self.saver_ = None
         self.training_set_ = None
         self.test_set_ = None
+        self.first_write = True
 
     @property
     def args(self):
@@ -120,6 +121,7 @@ class NetflixUtils(object):
                 self.saver_.restore(sess, tf.train.latest_checkpoint(self.args_.logdir))
             else:#Specified checkpoint
                 self.saver_.restore(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt-"+str(self.args_.checkpoint)))
+            self.first_write = False
             logging.debug('Model restored to step ' + str(self.global_step_.eval(sess)))
 
     def setup_projector(self, movie_tensor_name):
@@ -167,7 +169,6 @@ class NetflixUtils(object):
         logging.debug('Training model')
         training_results = []
         test_results = []
-        first_write = True
         while self.global_step_.eval(sess) < self.args_.n_iter:
             batch = next(train_batch_iter) # next batch of data to train on.
 
@@ -203,8 +204,8 @@ class NetflixUtils(object):
             if i % sess_save_freq == 0:
                 logging.debug('Saving model')
                 self.saver_.save(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt"), global_step=i)
-                self.save_perfo(training_results, False, first_write)
+                self.save_perfo(training_results, False, self.first_write)
                 training_results = []
-                self.save_perfo(test_results, True, first_write)
+                self.save_perfo(test_results, True, self.first_write)
                 test_results = []
-                first_write = False
+                self.first_write = False
