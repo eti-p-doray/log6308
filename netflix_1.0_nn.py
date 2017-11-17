@@ -8,11 +8,11 @@ import tensorflow as tf
 
 
 # Constants
-DEFAULT_N_ITER = 500000
 BATCH_SIZE = 512
+DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
 REGULARIZATION_FACTOR = 0.5
-LEARNING_SPEED = 1.0
-MODEL_NAME = "netflix_1.0_collaborative"
+LEARNING_SPEED = 0.5
+MODEL_NAME = "netflix_1.0_nn"
 
 #Main Script
 def main(argv):
