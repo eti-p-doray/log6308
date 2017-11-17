@@ -1,10 +1,14 @@
 import argparse
 import logging
-import tensorflow as tf
-import netflix_data
 import os
 import csv
+
+import numpy
+import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
+
+import netflix_data
+import utility
 
 class NetflixUtils(object):
 
@@ -163,7 +167,7 @@ class NetflixUtils(object):
                 for value in values:
                     csvwriter.writerow(value)
 
-    def train_model(self, sess, train_step, accuracy, rmse, loss,
+    def train_model(self, sess, train_step, accuracy, mse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, batch_size):
 
@@ -183,24 +187,35 @@ class NetflixUtils(object):
 
             # compute training values for visualisation.
             if i % train_data_update_freq == 0:
-                a, m, l = sess.run([accuracy, rmse, loss],
+                a, e, l = sess.run([accuracy, mse, loss],
                                          feed_dict={self.user_ids_: batch.user_ids,
                                                     self.movie_ids_: batch.movie_ids,
                                                     self.dates_ : batch.dates,
                                                     self.ratings_: batch.ratings})
-                logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(m))
-                training_results.append((i, a, m, l))
+                logging.info(str(i) + ": accuracy:" + str(a) + " loss: " + str(l) + " rmse: " + str(numpy.sqrt(e)))
+                training_results.append((i, a, numpy.sqrt(e), l))
 
             # compute test values for visualisation
             if i % test_data_update_freq == 0:
-                a, m, l = sess.run([accuracy, rmse, loss],
-                                   feed_dict={self.user_ids_: self.test_set.user_ids,
-                                              self.movie_ids_: self.test_set.movie_ids,
-                                              self.dates_: self.test_set.dates,
-                                              self.ratings_: self.test_set.ratings})
-                logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a) + " test loss: " + str(
-                    l) + " rmse: " + str(m))
-                test_results.append((i, a, m, l))
+                a_total = 0
+                e_total = 0
+                l_total = 0
+                for (first, last) in utility.split_range(0, self.test_set.ratings.shape[0], batch_size):
+                    chunk_size = last - first
+                    a, e, l = sess.run([accuracy, mse, loss],
+                                       feed_dict={self.user_ids_: self.test_set.user_ids[first:last],
+                                                  self.movie_ids_: self.test_set.movie_ids[first:last],
+                                                  self.dates_: self.test_set.dates[first:last],
+                                                  self.ratings_: self.test_set.ratings[first:last]})
+                    a_total = a_total + a * chunk_size
+                    e_total = e_total + e * chunk_size
+                    l_total = l_total + l * chunk_size
+                a_total = a_total / self.test_set.ratings.shape[0]
+                e_total = e_total / self.test_set.ratings.shape[0]
+                l_total = l_total / self.test_set.ratings.shape[0]
+                logging.info(str(i) + ": ********* epoch " + str(i) + " ********* test accuracy:" + str(a_total) + " test loss: " + str(
+                    l_total) + " rmse: " + str(numpy.sqrt(e_total)))
+                test_results.append((i, a_total, numpy.sqrt(e_total), l_total))
 
             # Saving training progress
             if i % sess_save_freq == 0:

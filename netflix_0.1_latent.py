@@ -11,7 +11,7 @@ BATCH_SIZE = 512
 DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
 REGULARIZATION_FACTOR = 0.5
 LEARNING_SPEED = 0.5
-MODEL_NAME = "netflix_0.0_latent"
+MODEL_NAME = "netflix_0.1_latent"
 
 
 def linear_bezier(t, p1, p2):
@@ -19,13 +19,9 @@ def linear_bezier(t, p1, p2):
     return (1 - t_) * p1 + t_ * p2
 
 
-def cubic_bezier(t, p):
-    t_ = t[:, tf.newaxis]
-    return (1-t_) * p[0,...] + t_ * p[1,...]
-    #t_ = t[:,tf.newaxis]
-    #return (1-t_) * ((1-t_) * p[0,...] + t_*p[1,...]) + t_ * ((1-t_)*p[1,...]+t_*p[2,...])
-    #t_ = tf.matrix_diag(t)
-    #return tf.matmul((1-t_), tf.matmul((1-t_), p[0,...]) + tf.matmul(t_,p[1,...])) + tf.matmul(t_, (tf.matmul((1-t_),p[1,...])+tf.matmul(t_,p[2,...])))
+def cubic_bezier(t, p1, p2, p3):
+    t_ = t[:,tf.newaxis]
+    return (1-t_) * ((1-t_) * p1 + t_*p2) + t_ * ((1-t_)*p2+t_*p3)
 
 
 def main(argv):
@@ -33,21 +29,19 @@ def main(argv):
     utils.parse_args(argv)
     utils.load_data()
 
-    user_embedding_size = 40
-    movie_embedding_size = 40
+    user_embedding_size = 20
+    movie_embedding_size = 20
 
     utils.init_tensorflow()
     #Trainable embeddings for users. Tensor format n_user x user_embedding_size.
     #Initialized randomly accorded to a truncated normal distribution
+    user_embeddings_initializer = tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size], stddev=0.1)
     user_embeddings1 = tf.get_variable("user_embeddings1",
-                                      initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size],
-                                                                      stddev=0.1), trainable=True)
+                                      initializer=user_embeddings_initializer, trainable=True)
     user_embeddings2 = tf.get_variable("user_embeddings2",
-                                      initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size],
-                                                                      stddev=0.1), trainable=True)
+                                      initializer=user_embeddings_initializer, trainable=True)
     user_embeddings3 = tf.get_variable("user_embeddings3",
-                                      initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size],
-                                                                      stddev=0.1), trainable=True)
+                                      initializer=user_embeddings_initializer, trainable=True)
     embedded_users1 = tf.gather(user_embeddings1, utils.user_ids)  # Loads embeddings of currently treated users.
     embedded_users2 = tf.gather(user_embeddings2, utils.user_ids)  # Loads embeddings of currently treated users.
     embedded_users3 = tf.gather(user_embeddings3, utils.user_ids)  # Loads embeddings of currently treated users.
@@ -70,14 +64,16 @@ def main(argv):
     max_date = numpy.max(utils.training_set.dates)
     normalized_dates = tf.cast(utils.dates - min_date, tf.float32) / (max_date - min_date)
 
-    user_bias_interpolated = linear_bezier(normalized_dates, gathered_user_bias1[:,tf.newaxis], gathered_user_bias2[:,tf.newaxis])
-    embedded_users_interpolated = linear_bezier(normalized_dates, embedded_users1, embedded_users2)
+    user_bias_interpolated = cubic_bezier(normalized_dates,
+                                          gathered_user_bias1[:,tf.newaxis],
+                                          gathered_user_bias2[:,tf.newaxis],
+                                          gathered_user_bias3[:,tf.newaxis])
+    embedded_users_interpolated = cubic_bezier(normalized_dates, embedded_users1, embedded_users2, embedded_users3)
 
     B = numpy.mean(utils.training_set.ratings)
     Y = tf.reduce_sum(tf.multiply(embedded_movies, embedded_users_interpolated), 1) + user_bias_interpolated + gathered_movie_bias + B
 
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
-    rmse = tf.sqrt(mse)
     loss = (mse + REGULARIZATION_FACTOR*(
            tf.reduce_mean(tf.reduce_sum(tf.square(embedded_users_interpolated), 1)) +
            tf.reduce_mean(tf.reduce_sum(tf.square(embedded_movies), 1)) +
@@ -100,10 +96,10 @@ def main(argv):
     utils.setup_projector(movie_embeddings.name)
 
     train_data_update_freq = 20
-    test_data_update_freq = 1000
+    test_data_update_freq = 100000
     sess_save_freq = 5000
 
-    utils.train_model(sess, train_step, accuracy, rmse, loss,
+    utils.train_model(sess, train_step, accuracy, mse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, BATCH_SIZE)
 

@@ -62,7 +62,6 @@ def main(argv):
 
     #Error calculation
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
-    rmse = tf.sqrt(mse)
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
            tf.reduce_mean(tf.square(embedded_users)) +
@@ -92,7 +91,7 @@ def main(argv):
     test_data_update_freq = 1000
     sess_save_freq = 5000
 
-    utils.train_model(sess, train_step, accuracy, rmse, loss,
+    utils.train_model(sess, train_step, accuracy, mse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, BATCH_SIZE)
 
