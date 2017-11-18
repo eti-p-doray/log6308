@@ -8,7 +8,7 @@ import tensorflow as tf
 
 BATCH_SIZE = 512
 DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
-REGULARIZATION_FACTOR = 0.1
+REGULARIZATION_FACTOR = 0.01
 LEARNING_SPEED = 0.5
 MODEL_NAME = "netflix_2.0_kernel"
 
@@ -18,22 +18,22 @@ def main(argv):
     utils.parse_args(argv)
     utils.load_data()
 
-    user_embedding_size = 40
-    movie_embedding_size = 40
+    user_embedding_size = 60
+    movie_embedding_size = 60
 
     utils.init_tensorflow()
 
     user_embeddings = tf.get_variable("user_embeddings",
                                       initializer=tf.truncated_normal([netflix_data.USER_COUNT, user_embedding_size],
                                                                       stddev=0.1))
-    user_covariance = tf.get_variable("user_bias", initializer=tf.ones([netflix_data.USER_COUNT, user_embedding_size]))
+    user_covariance = tf.get_variable("user_covariance", initializer=tf.ones([netflix_data.USER_COUNT, user_embedding_size]))
     embedded_users = tf.gather(user_embeddings, utils.user_ids)
     user_covariance_gathered = tf.gather(user_covariance, utils.user_ids)
 
     movie_embeddings = tf.get_variable("movie_embeddings",
                                        initializer=tf.truncated_normal([netflix_data.MOVIE_COUNT, movie_embedding_size],
                                                                        stddev=0.1))
-    movie_covariance = tf.get_variable("movie_bias", initializer=tf.ones([netflix_data.MOVIE_COUNT, movie_embedding_size]))
+    movie_covariance = tf.get_variable("movie_covariance", initializer=tf.ones([netflix_data.MOVIE_COUNT, movie_embedding_size]))
     embedded_movies = tf.gather(movie_embeddings, utils.movie_ids)
     movies_covariance_gathered = tf.gather(movie_covariance, utils.movie_ids)
 
@@ -51,7 +51,7 @@ def main(argv):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # training, learning rate = 0.005
-    train_step = tf.train.AdadeltaOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     # init
     logging.debug('Initializing model')

@@ -127,6 +127,13 @@ class NetflixUtils(object):
                 self.saver_.restore(sess, os.path.join(self.args_.logdir, self.model_name_+".ckpt-"+str(self.args_.checkpoint)))
             self.first_write = False
             logging.debug('Model restored to step ' + str(self.global_step_.eval(sess)))
+            return True
+        return False
+
+    def initialize_variables_from_checkpoint(self, sess, model_name, variables):
+      if os.path.exists(os.path.join("log", model_name, 'checkpoint')):
+        loader = tf.train.Saver(variables)
+        loader.restore(sess, tf.train.latest_checkpoint(os.path.join("log", model_name)))
 
     def setup_projector(self, movie_tensor_name):
         ############################################################################

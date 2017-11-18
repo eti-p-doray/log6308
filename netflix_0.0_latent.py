@@ -9,7 +9,7 @@ import tensorflow as tf
 
 BATCH_SIZE = 512
 DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
-REGULARIZATION_FACTOR = 0.5
+REGULARIZATION_FACTOR = 0.01
 LEARNING_SPEED = 0.5
 MODEL_NAME = "netflix_0.0_latent"
 
@@ -60,7 +60,7 @@ def main(argv):
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     # training setup
-    train_step = tf.train.AdadeltaOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
+    train_step = tf.train.GradientDescentOptimizer(LEARNING_SPEED).minimize(loss, global_step=utils.global_step)
 
     ############################################################################
     ## Session Initialization and restoration
