@@ -87,7 +87,7 @@ class NetflixUtils(object):
         parser = argparse.ArgumentParser(description="""
         Simple matrix factorization algorithm to find latent variables that represents netflix prize data.
         """, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_probe_training.npy',
+        parser.add_argument('-i', '--input', default = 'nf_prize_dataset/nf_training.npy',
                             help='Netflix input data input file.')
         parser.add_argument('-t', '--test_set', default = 'nf_prize_dataset/nf_probe.npy',
                             help='Netflix test set input file.')
