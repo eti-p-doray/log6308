@@ -99,6 +99,8 @@ class NetflixUtils(object):
                             help='Directory where logs should be written.')
         parser.add_argument('--log_perf', action='store_true',
                             help='Enables performance logging.')
+        parser.add_argument('--gen_movie_titles', action='store_true',
+                            help='Enables movie title list generation for each datasets')
 
         # Configuring Log severity for future printing
         logging.basicConfig(level=logging.DEBUG)
