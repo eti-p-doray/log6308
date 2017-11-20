@@ -12,7 +12,7 @@ BATCH_SIZE = 512
 DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
 REGULARIZATION_FACTOR = 0.05
 LEARNING_SPEED = 0.5
-MODEL_NAME = "netflix_3.0_word2vec"
+MODEL_NAME = "netflix_3.1_word2vec"
 
 
 def main(argv):
