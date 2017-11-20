@@ -5,6 +5,7 @@ import itertools
 import logging
 import numpy
 import os
+import sys
 
 import utility
 
@@ -13,19 +14,22 @@ USER_COUNT = 480189
 MAX_USER_ID = 2649429
 NUM_RATING = 100480507
 
+
 Datasets = collections.namedtuple('Datasets', ['train', 'validation', 'test'])
+
 
 class DataSet(object):
     @staticmethod
     def fromfile(filename):
         data = numpy.load(filename)
-        return DataSet(data[0,:], data[1,:], data[2,:], data[3,:])
+        return DataSet(data['movie_ids'], data['user_ids'], data['dates'], data['ratings'], data['user_map'])
 
-    def __init__(self, movie_ids, user_ids, dates, ratings):
+    def __init__(self, movie_ids, user_ids, dates, ratings, user_map):
         self.movie_ids_ = numpy.asarray(movie_ids)
         self.user_ids_ = numpy.asarray(user_ids)
         self.dates_ = numpy.asarray(dates)
         self.ratings_ = numpy.asarray(ratings)
+        self.user_map_ = user_map
 
     @property
     def num_examples(self):
@@ -47,6 +51,10 @@ class DataSet(object):
     def ratings(self):
         return self.ratings_
 
+    @property
+    def user_map(self):
+        return self.user_map_
+
     def iter_batch(self, batch_size, shuffle=True):
         while True:
             indices = numpy.random.choice(self.num_examples, batch_size)
@@ -54,7 +62,7 @@ class DataSet(object):
             user_ids = self.user_ids_[indices]
             dates = self.dates_[indices]
             ratings = self.ratings_[indices]
-            yield DataSet(movie_ids, user_ids, dates, ratings)
+            yield DataSet(movie_ids, user_ids, dates, ratings, self.user_map)
 
     def split(self, validation_size, test_size):
         assert validation_size + test_size <= self.num_examples
@@ -69,7 +77,7 @@ class DataSet(object):
                 user_ids = self.user_ids_[indices]
                 dates = self.dates_[indices]
                 ratings = self.ratings_[indices]
-                yield DataSet(movie_ids, user_ids, dates, ratings)
+                yield DataSet(movie_ids, user_ids, dates, ratings, self.user_map)
 
         datasets = genenerate_datasets()
         train = next(datasets)
@@ -78,7 +86,41 @@ class DataSet(object):
         return Datasets(train=train, validation=validation, test=test)
 
     def save(self, filename):
-        numpy.save(filename, numpy.vstack((self.movie_ids_, self.user_ids_, self.dates_, self.ratings_)))
+        numpy.savez(filename,
+                    movie_ids = self.movie_ids_,
+                    user_ids = self.user_ids_,
+                    dates = self.dates_,
+                    ratings = self.ratings_,
+                    user_map = self.user_map_)
+
+    def find_dense_subset(self, n_users, n_movies):
+        user_ratings = numpy.zeros(USER_COUNT)
+        movie_ratings = numpy.zeros(MOVIE_COUNT)
+        for user, movie in zip(self.user_ids_, self.movie_ids_):
+            user_ratings[user] += 1
+            movie_ratings[movie] += 1
+        user_subset = set(numpy.argpartition(user_ratings, -n_users)[-n_users:])
+        movie_subset = set(numpy.argpartition(movie_ratings, -n_movies)[-n_movies:])
+
+        n_couples = 0
+        for user, movie in zip(self.user_ids_, self.movie_ids_):
+            if user in user_subset and movie in movie_subset:
+                n_couples += 1
+
+        ratings = numpy.zeros(n_couples, dtype=numpy.int8)
+        movie_ids = numpy.zeros(n_couples, dtype=numpy.int16)
+        user_ids = numpy.zeros(n_couples, dtype=numpy.int32)
+        dates = numpy.zeros(n_couples, dtype=numpy.int32)
+        j = 0
+        for i in range(self.num_examples):
+            if self.user_ids_[i] in user_subset and self.movie_ids[i] in movie_subset:
+                ratings[j] = self.ratings_[i]
+                movie_ids[j] = self.movie_ids_[i]
+                user_ids[j] = self.user_ids_[i]
+                dates[j] = self.dates_[i]
+                j += 1
+
+        return DataSet(movie_ids, user_ids, dates, ratings, self.user_map)
 
     def split_probe_subset(self, probe_file_path):
         couples = set()
@@ -95,24 +137,31 @@ class DataSet(object):
                         couples.add((last_movie_id, int(line)))
                         n_couples = n_couples + 1
 
-        test_ratings = numpy.zeros(n_couples, dtype=numpy.int8)
-        test_movieids = numpy.zeros(n_couples, dtype=numpy.int16)
-        test_userids = numpy.zeros(n_couples, dtype=numpy.int32)
-        test_dates = numpy.zeros(n_couples, dtype=numpy.int32)
 
-        training_size = NUM_RATING - n_couples
+        training_size = 0
+        probe_size = 0
+        for i, movie_id in enumerate(self.movie_ids_):
+            user_id = self.user_ids[i]
+            if (movie_id, self.user_map[user_id]) in couples:
+                probe_size += 1
+            else:
+                training_size += 1
+
+        test_ratings = numpy.zeros(probe_size, dtype=numpy.int8)
+        test_movieids = numpy.zeros(probe_size, dtype=numpy.int16)
+        test_userids = numpy.zeros(probe_size, dtype=numpy.int32)
+        test_dates = numpy.zeros(probe_size, dtype=numpy.int32)
+
         training_ratings = numpy.zeros(training_size, dtype=numpy.int8)
         training_movieids = numpy.zeros(training_size, dtype=numpy.int16)
         training_userids = numpy.zeros(training_size, dtype=numpy.int32)
         training_dates = numpy.zeros(training_size, dtype=numpy.int32)
 
-        users = numpy.load('nf_prize_dataset/users.npy')
-
         j = 0
         k = 0
         for i, movie_id in enumerate(self.movie_ids_):
             user_id = self.user_ids_[i]
-            if (movie_id, users[user_id]) in couples:
+            if (movie_id, self.user_map[user_id]) in couples:
                 test_userids[k] = user_id
                 test_movieids[k] = movie_id
                 test_ratings[k] = self.ratings_[i]
@@ -125,9 +174,10 @@ class DataSet(object):
                 training_dates[j] = self.dates_[i]
                 j = j + 1
 
-        print(j, " ", k)
         ## Returns Test_set, Training_set, both complementary
-        return DataSet(test_movieids, test_userids, test_dates, test_ratings), DataSet(training_movieids, training_userids, training_dates, training_ratings)
+        test_dataset = DataSet(test_movieids, test_userids, test_dates, test_ratings, self.user_map)
+        training_dataset = DataSet(training_movieids, training_userids, training_dates, training_ratings, self.user_map)
+        return test_dataset, training_dataset
 
 
 def read_data_sets(train_dir):
@@ -157,7 +207,7 @@ def read_data_sets(train_dir):
                     k = k + 1
 
     users, userids = numpy.unique(userids, return_inverse=True)
-    return DataSet(movieids, userids, dates, ratings), users
+    return DataSet(movieids, userids, dates, ratings, users)
 
 
 def export_movie_titles(input, output):
@@ -168,10 +218,22 @@ def export_movie_titles(input, output):
         for row in reader:
             writer.writerow(row)
 
-#export_movie_titles('nf_prize_dataset/movie_titles.txt', 'nf_prize_dataset/movie_titles.tsv')
+def main(argv):
+    logging.basicConfig(level=logging.DEBUG)
 
-#logging.basicConfig(level=logging.DEBUG)
-#nf_prize, users = read_data_sets("nf_prize_dataset/training_set")
-#nf_prize.save("nf_prize_dataset/nf_prize.npy")
-#numpy.save("nf_prize_dataset/users.npy", users)
-#print(nf_prize.num_examples)
+    if not os.path.exists("nf_prize_dataset/nf_prize.npz"):
+        nf_prize = read_data_sets("nf_prize_dataset/training_set")
+        nf_prize.save("nf_prize_dataset/nf_prize.npz")
+    else:
+        nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npz")
+    nf_test, nf_training = nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
+    nf_test.save("nf_prize_dataset/nf_test.npz")
+    nf_training.save("nf_prize_dataset/nf_training.npz")
+    small_nf_prize = nf_prize.find_dense_subset(5000, 250)
+    small_nf_prize.save("nf_prize_dataset/small_nf_prize.npz")
+    small_nf_test, small_nf_training = small_nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
+    small_nf_test.save("nf_prize_dataset/small_nf_test.npz")
+    small_nf_training.save("nf_prize_dataset/small_nf_training.npz")
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
