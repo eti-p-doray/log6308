@@ -263,11 +263,9 @@ def preprocess_get_titles(gen_movie_titles):
                 i = i + 1
 
         numpy.save('nf_prize_dataset/nf_titles.npy', title_array)
-
         logging.debug('Titles generated and saved')
 
     else:
-
         title_array = numpy.load('nf_prize_dataset/nf_titles.npy')
         logging.debug('Title loaded from existing')
     return title_array
