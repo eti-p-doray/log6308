@@ -51,8 +51,7 @@ def preprocess_get_titles(utils):
                     first = False
                     continue
                 words = line.split()
-                words.pop(0)
-                words.pop(0) #remove year
+                words = words[2:] #remove movie id and year
                 title = " ".join(words)
                 all_titles.append(title)
 
@@ -115,11 +114,9 @@ def main(argv):
 
     #Error calculation
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
-    rmse = tf.sqrt(mse)
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
            tf.reduce_mean(tf.reduce_sum(tf.square(embedded_users), 1)) +
-           tf.reduce_mean(tf.reduce_sum(tf.square(embedded_titles), 1)) +
            tf.reduce_mean(tf.square(tf.gather(user_bias, utils.user_ids))) +
            tf.reduce_mean(tf.square(tf.gather(movie_bias, utils.movie_ids)))))
 
@@ -147,7 +144,7 @@ def main(argv):
     test_data_update_freq = 1000
     sess_save_freq = 5000
 
-    utils.train_model(sess, train_step, accuracy, rmse, loss,
+    utils.train_model(sess, train_step, accuracy, mse, loss,
                     train_data_update_freq, test_data_update_freq,
                     sess_save_freq, BATCH_SIZE)
 
