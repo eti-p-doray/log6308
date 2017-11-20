@@ -3,6 +3,7 @@ import csv
 import datetime
 import itertools
 import logging
+import math
 import numpy
 import os
 import sys
@@ -217,6 +218,60 @@ def export_movie_titles(input, output):
         writer.writerow(['Id', 'Year', 'Title'])
         for row in reader:
             writer.writerow(row)
+
+def preprocess_word_nt(movie_titles):
+    nt = {}
+    for movie_title in movie_titles:
+        for word in movie_title:
+            if word in nt:
+                nt[word] = nt[word] + 1
+            else:
+                nt[word] = 1
+    return nt
+
+def preprocess_title_embeddings(model, movie_titles, nt, ncol):
+    embeddings = numpy.zeros((len(movie_titles), ncol), dtype=numpy.float32)
+    for i, movie_title in enumerate(movie_titles):
+        embedding = numpy.zeros(ncol)
+        length = 0
+        for word in movie_title:
+            if word in model.wv.vocab:
+                word_vector = model[word][0:ncol]
+                tfidf = math.log10(len(movie_titles) / nt[word])
+                embedding = embedding + tfidf * word_vector
+                length = length + 1
+        if length > 0:
+            embedding = embedding / length
+        print(embedding)
+        embeddings[i] = embedding
+
+    return embeddings
+
+def preprocess_get_titles(gen_movie_titles):
+    if gen_movie_titles:
+        title_array = numpy.zeros(MOVIE_COUNT, dtype=numpy.unicode_)
+        i = 0
+        with open('nf_prize_dataset/movie_titles.tsv') as f:
+            first = True
+            for line in f:
+                if first: #ignore header line
+                    first = False
+                    continue
+                words = line.split()
+                words = words[2:] #remove movie id and year
+                title = " ".join(words)
+                title_array[i] = title
+                i = i + 1
+
+        numpy.save('nf_prize_dataset/nf_titles.npy', title_array)
+
+        logging.debug('Titles generated and saved')
+
+    else:
+
+        title_array = numpy.load('nf_prize_dataset/nf_titles.npy')
+        logging.debug('Title loaded from existing')
+    return title_array
 
 def main(argv):
     logging.basicConfig(level=logging.DEBUG)
