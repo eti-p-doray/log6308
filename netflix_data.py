@@ -282,12 +282,12 @@ def main(argv):
     else:
         nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npz")
     nf_test, nf_training = nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
-    nf_test.save("nf_prize_dataset/nf_test.npz")
+    nf_test.save("nf_prize_dataset/nf_probe.npz")
     nf_training.save("nf_prize_dataset/nf_training.npz")
     small_nf_prize = nf_prize.find_dense_subset(5000, 250)
     small_nf_prize.save("nf_prize_dataset/small_nf_prize.npz")
     small_nf_test, small_nf_training = small_nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
-    small_nf_test.save("nf_prize_dataset/small_nf_test.npz")
+    small_nf_test.save("nf_prize_dataset/small_nf_probe.npz")
     small_nf_training.save("nf_prize_dataset/small_nf_training.npz")
 
 if __name__ == "__main__":
