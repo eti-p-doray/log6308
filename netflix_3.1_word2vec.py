@@ -26,6 +26,8 @@ def main(argv):
     ## Description of the TensorFlow model.
     #Constants
     user_embedding_size = 60
+    movie_embedding_size = 40
+    title_embedding_size = 20
 
     utils.init_tensorflow()
 
@@ -34,12 +36,15 @@ def main(argv):
     model = KeyedVectors.load_word2vec_format('./word2vec/GoogleNews-vectors-negative300.bin', binary=True)
     title_embedding_value = netflix_data.preprocess_title_embeddings(model, movie_titles,
                                                                      netflix_data.preprocess_word_nt(movie_titles),
-                                                                 user_embedding_size)
+                                                                     title_embedding_size)
 
     logging.debug('done with preprocess')
 
     title_embeddings = tf.get_variable("title_embeddings", initializer=tf.constant(numpy.asarray(title_embedding_value), dtype=numpy.float32), trainable=False)
+    movie_embeddings = tf.get_variable("movie_embeddings",
+                                        initializer=tf.truncated_normal([netflix_data.USER_COUNT, movie_embedding_size], stddev=0.1))
     embedded_titles = tf.gather(title_embeddings, utils.movie_ids)
+    embedded_movies = tf.gather(movie_embeddings, utils.movie_ids)
 
     logging.debug("title embedding initialized")
 
@@ -55,13 +60,15 @@ def main(argv):
     B = numpy.mean(utils.training_set.ratings)
 
     # Layer description
-    Y = tf.reduce_sum(tf.multiply(embedded_titles, embedded_users), 1) + tf.gather(user_bias, utils.user_ids) + tf.gather(movie_bias, utils.movie_ids) + B
+    Y = tf.reduce_sum(tf.multiply(tf.concat([embedded_movies, embedded_titles], axis=1), embedded_users), 1) + \
+        tf.gather(user_bias, utils.user_ids) + tf.gather(movie_bias, utils.movie_ids) + B
 
     #Error calculation
     mse = tf.reduce_mean(tf.square(tf.cast(utils.ratings, tf.float32) - Y))
     # Loss function to minimize
     loss = (mse + REGULARIZATION_FACTOR*(
            tf.reduce_mean(tf.reduce_sum(tf.square(embedded_users), 1)) +
+           tf.reduce_mean(tf.reduce_sum(tf.square(embedded_movies), 1)) +
            tf.reduce_mean(tf.square(tf.gather(user_bias, utils.user_ids))) +
            tf.reduce_mean(tf.square(tf.gather(movie_bias, utils.movie_ids)))))
 
@@ -81,6 +88,7 @@ def main(argv):
 
     utils.restore_existing_checkpoint(sess)
     utils.setup_projector(title_embeddings.name)
+    utils.setup_projector(movie_embeddings.name)
 
 
     ############################################################################
