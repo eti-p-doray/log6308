@@ -55,6 +55,7 @@ def preprocess_get_titles(utils):
                 words = words[2:] #remove movie id and year
                 title = " ".join(words)
                 title_array[i] = title
+                i = i + 1 
 
         numpy.save('nf_prize_dataset/nf_titles.npy', title_array)
 
