@@ -13,7 +13,7 @@ BATCH_SIZE = 512
 DEFAULT_N_ITER = int(40 * netflix_data.NUM_RATING / BATCH_SIZE)
 REGULARIZATION_FACTOR = 0.5
 LEARNING_SPEED = 0.5
-MODEL_NAME = "netflix_0.0_latent"
+MODEL_NAME = "netflix_3.0_word2vec"
 
 def preprocess_word_nt(movie_titles):
     nt = {}
@@ -55,7 +55,7 @@ def preprocess_get_titles(utils):
                 words = words[2:] #remove movie id and year
                 title = " ".join(words)
                 title_array[i] = title
-                i = i + 1 
+                i = i + 1
 
         numpy.save('nf_prize_dataset/nf_titles.npy', title_array)
 
