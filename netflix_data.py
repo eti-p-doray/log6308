@@ -22,7 +22,7 @@ class DataSet(object):
     @staticmethod
     def fromfile(filename):
         data = numpy.load(filename)
-        return DataSet(data['movie_ids'], data['movie_ids'], data['dates'], data['ratings'], data['user_map'])
+        return DataSet(data['movie_ids'], data['user_ids'], data['dates'], data['ratings'], data['user_map'])
 
     def __init__(self, movie_ids, user_ids, dates, ratings, user_map):
         self.movie_ids_ = numpy.asarray(movie_ids)
@@ -62,7 +62,7 @@ class DataSet(object):
             user_ids = self.user_ids_[indices]
             dates = self.dates_[indices]
             ratings = self.ratings_[indices]
-            yield DataSet(movie_ids, user_ids, dates, ratings)
+            yield DataSet(movie_ids, user_ids, dates, ratings, self.user_map)
 
     def split(self, validation_size, test_size):
         assert validation_size + test_size <= self.num_examples
@@ -77,7 +77,7 @@ class DataSet(object):
                 user_ids = self.user_ids_[indices]
                 dates = self.dates_[indices]
                 ratings = self.ratings_[indices]
-                yield DataSet(movie_ids, user_ids, dates, ratings)
+                yield DataSet(movie_ids, user_ids, dates, ratings, self.user_map)
 
         datasets = genenerate_datasets()
         train = next(datasets)
@@ -94,8 +94,8 @@ class DataSet(object):
                     user_map = self.user_map_)
 
     def find_dense_subset(self, n_users, n_movies):
-        user_ratings = numpy.zeros((USER_COUNT))
-        movie_ratings = numpy.zeros((MOVIE_COUNT))
+        user_ratings = numpy.zeros(USER_COUNT)
+        movie_ratings = numpy.zeros(MOVIE_COUNT)
         for user, movie in zip(self.user_ids_, self.movie_ids_):
             user_ratings[user] += 1
             movie_ratings[movie] += 1
@@ -138,7 +138,6 @@ class DataSet(object):
                         n_couples = n_couples + 1
 
 
-
         training_size = 0
         probe_size = 0
         for i, movie_id in enumerate(self.movie_ids_):
@@ -147,6 +146,8 @@ class DataSet(object):
                 probe_size += 1
             else:
                 training_size += 1
+
+        print()
 
         test_ratings = numpy.zeros(probe_size, dtype=numpy.int8)
         test_movieids = numpy.zeros(probe_size, dtype=numpy.int16)
@@ -222,16 +223,19 @@ def export_movie_titles(input, output):
 def main(argv):
     logging.basicConfig(level=logging.DEBUG)
 
-    nf_prize = read_data_sets("nf_prize_dataset/training_set")
-    nf_prize.save("nf_prize_dataset/nf_prize.npz")
+    if not os.path.exists("nf_prize_dataset/nf_prize.npz"):
+        nf_prize = read_data_sets("nf_prize_dataset/training_set")
+        nf_prize.save("nf_prize_dataset/nf_prize.npz")
+    else:
+        nf_prize = DataSet.fromfile("nf_prize_dataset/nf_prize.npz")
     nf_test, nf_training = nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
     nf_test.save("nf_prize_dataset/nf_test.npz")
-    nf_training.save("nf_prize_dataset/nf_test.npz")
+    nf_training.save("nf_prize_dataset/nf_training.npz")
     small_nf_prize = nf_prize.find_dense_subset(5000, 250)
     small_nf_prize.save("nf_prize_dataset/small_nf_prize.npz")
     small_nf_test, small_nf_training = small_nf_prize.split_probe_subset("nf_prize_dataset/probe.txt")
     small_nf_test.save("nf_prize_dataset/small_nf_test.npz")
-    small_nf_training.save("nf_prize_dataset/small_nf_test.npz")
+    small_nf_training.save("nf_prize_dataset/small_nf_training.npz")
 
 if __name__ == "__main__":
     main(sys.argv[1:])
