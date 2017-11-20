@@ -43,7 +43,8 @@ def preprocess_title_embeddings(model, movie_titles, nt, ncol):
 
 def preprocess_get_titles(utils):
     if utils.args.gen_movie_titles:
-        all_titles = []
+        title_array = numpy.zeros(netflix_data.MOVIE_COUNT, dtype=numpy.unicode_)
+        i = 0
         with open('nf_prize_dataset/movie_titles.tsv') as f:
             first = True
             for line in f:
@@ -53,9 +54,8 @@ def preprocess_get_titles(utils):
                 words = line.split()
                 words = words[2:] #remove movie id and year
                 title = " ".join(words)
-                all_titles.append(title)
+                title_array[i] = title
 
-        title_array = numpy.array(all_titles, dtype=numpy.unicode_)
         numpy.save('nf_prize_dataset/nf_titles.npy', title_array)
 
         logging.debug('Titles generated and saved')
