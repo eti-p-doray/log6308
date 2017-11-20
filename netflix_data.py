@@ -147,8 +147,6 @@ class DataSet(object):
             else:
                 training_size += 1
 
-        print()
-
         test_ratings = numpy.zeros(probe_size, dtype=numpy.int8)
         test_movieids = numpy.zeros(probe_size, dtype=numpy.int16)
         test_userids = numpy.zeros(probe_size, dtype=numpy.int32)
