@@ -248,7 +248,7 @@ def preprocess_title_embeddings(model, movie_titles, nt, ncol):
 
 def preprocess_get_titles(gen_movie_titles):
     if gen_movie_titles:
-        title_array = numpy.zeros(MOVIE_COUNT, dtype=numpy.unicode_)
+        title_array = numpy.zeros(MOVIE_COUNT, dtype=object)
         i = 0
         with open('nf_prize_dataset/movie_titles.tsv') as f:
             first = True
