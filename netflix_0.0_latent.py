@@ -1,3 +1,5 @@
+# Simple latent factor model with biais.
+
 import logging
 import sys
 import numpy

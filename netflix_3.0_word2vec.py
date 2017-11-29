@@ -1,3 +1,5 @@
+# Latent factor models with fixed title embeddings from word2vec.
+
 import logging
 import sys
 import numpy
