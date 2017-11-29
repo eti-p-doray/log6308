@@ -50,3 +50,12 @@ Finally, make a `log` folder at the root of the project : the output of the scri
 #### Google word2vec
 
 Two of our scripts use word vectors to make predictions. For that, we have used a pretrained Google word2vec model, loaded with gensim. You can find the link for such pretrained model on [https://code.google.com/archive/p/word2vec/](https://code.google.com/archive/p/word2vec/) (find the section called "Pre-trained word and phrase vectors"). Once downloaded, unzip it and put the resulting `GoogleNews-vectors-negative300.bin` file in a `word2vec` folder at the root of this project.
+
+## Training
+
+Each script can be run without arguments to use default model configuration. Scripts are provided with help for how to use optional command line arguments. Here's an exemple of how to run model netflix_0.0_latent:
+
+`python3 netflix_0.0_latent.py`
+
+This will run model training and validation. Progress is written in console while model state is saved in log/model_name/ folder and can be visualized with tensorboad.
+
