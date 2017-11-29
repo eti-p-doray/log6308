@@ -10,6 +10,10 @@ We implemented a few techniques in TensorFlow in order to try and compare their 
 - Word vectors on titles in `netflix_3.0_word2vec.py`
 - Word vectors and latent factorization hybrid in `netflix_3.1_word2vec`
 
+## Documentation
+
+See presentation-log6308.pdf for presentation slides (french) and rapport-log6308.pdf for accompanying comments.
+
 ## Installation
 
 As we didn't make a build configuration, you will need to manually install the requirements and download the data in order to be able to run the project.
@@ -36,6 +40,7 @@ We haven't included any data in this project, you'll need to get your hand on it
 
 #### Netflix Prize data
 
+Note that we have provided a small subset of the data in binary form. If used, this step can be skipped.
 You will first need to find the dataset given with the Netflix Prize. At the time of this project's creation, you could find it at the top of a Google search. Unzip it's content at the root of this project, such as you would have a `nf_prize_dataset` folder at the root, which would contain a `training_set` folder. Once that is done, execute `python3 netflix_data.py` in order to make numpy array files with this data (and they're the ones to be used with the rest of the scripts) :
 
 - `nf_prize_dataset/nf_prize.npz` : Array with all the data contained in the training set. If you rerun `netflix_data.py` while it exists, it'll be imported and used instead of being regenerated.
@@ -59,3 +64,6 @@ Each script can be run without arguments to use default model configuration. Scr
 
 This will run model training and validation. Progress is written in console and optionally can be saved to log/model_name/ as a .csv with `--log_perf` flag. Model state is always saved to log/model_name/ folder and can be visualized with tensorboad.
 
+We have provided a small subset of the data in binary form. To use it when running models, file inputs paths need to be provided:
+
+`python3 netflix_0.0_latent.py -i nf_prize_dataset/small_nf_training.npz -t nf_prize_dataset/small_nf_probe.npz`
