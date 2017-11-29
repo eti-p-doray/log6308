@@ -1,3 +1,5 @@
+# Latent factor model similar to 0.0_latent but with bazier curves to handle time component.
+
 import logging
 import sys
 import numpy

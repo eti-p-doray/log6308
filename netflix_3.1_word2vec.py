@@ -1,3 +1,5 @@
+# Latent factor models with hybrid title embeddings from word2vec and learned movie factors.
+
 import logging
 import sys
 import numpy

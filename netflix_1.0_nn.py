@@ -1,3 +1,5 @@
+# Neural network model to predict ratings from embeddings.
+
 import logging
 import sys
 

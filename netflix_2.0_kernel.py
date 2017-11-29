@@ -1,3 +1,5 @@
+# Gaussian kernel model with euclidean distance on embeddings.
+
 import logging
 import sys
 
