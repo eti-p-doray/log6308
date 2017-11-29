@@ -57,5 +57,5 @@ Each script can be run without arguments to use default model configuration. Scr
 
 `python3 netflix_0.0_latent.py`
 
-This will run model training and validation. Progress is written in console while model state is saved in log/model_name/ folder and can be visualized with tensorboad.
+This will run model training and validation. Progress is written in console and optionally can be saved to log/model_name/ as a .csv with `--log_perf` flag. Model state is always saved to log/model_name/ folder and can be visualized with tensorboad.
 
